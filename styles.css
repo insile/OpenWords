@@ -1,0 +1,192 @@
+/*
+
+This CSS file will be included with your plugin, and
+available in the app when your plugin is enabled.
+
+If your plugin does not need CSS, delete this file.
+
+*/
+
+/* 学习模式标题 */
+.type-title {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+/* 设置 */
+.openwords-toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 每行 4 列 */
+    gap: 10px; /* 每个 toggle 之间的间距 */
+    /* margin-top: 10px; */
+}
+.openwords-toggle-grid .setting-item:first-child {
+    padding-top: 10px;
+    border-top: 1px solid var(--background-modifier-border)
+}
+
+.type-modal{
+    width: 650px; /* 设置模态框宽度 */
+}
+/* 卡片容器样式 */
+.anki-card {
+    width: 500px; /* 固定宽度 */
+    height: 300px; /* 固定高度 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    margin: 20px auto;
+    background-color: var(--background-primary);
+    text-align: center;
+    cursor: pointer; /* 鼠标悬停时显示手型 */
+}
+.anki-card:hover {
+    background-color: var(--background-modifier-hover); /* 鼠标悬停时背景变浅 */
+}
+
+/* 单词内容样式 */
+.anki-card-content {
+    font-size: 2.5em; /* 设置单词字体大小 */
+    font-weight: bold; /* 设置单词加粗 */
+    color: var(--text-normal); /* 设置单词颜色 */
+}
+
+/* Markdown 内容样式 */
+.anki-markdown-content {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto; /* 添加垂直滚动条 */
+    background-color: var(--background-secondary); /* 更柔和的背景颜色 */
+    color: var(--text-muted); /* 使用正常文本颜色 */
+    font-size: 1.1em; /* 稍微增大字体 */
+    line-height: 1.6; /* 增加行高，提升可读性 */
+    border-radius: 8px; /* 添加圆角 */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* 添加阴影效果 */
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; /* 设置优雅的字体 */
+    user-select: text; /* 允许文本选择 */
+}
+
+/* 设置容器样式 */
+.anki-settings {
+    margin-top: 20px;
+    font-size: 1em; /* 减小字体大小 */
+}
+
+.anki-settings .setting-item {
+    padding: 5px 10px; /* 减小内边距 */
+}
+
+
+/* 单词列表模态框 */
+.word-list-modal{
+    width: 400px;
+}
+
+.word-list-title {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-bottom: 1em;
+    text-align: center;
+}
+
+.word-list-filters {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1em;
+}
+
+.word-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+}
+
+.word-list-filters .setting-item:first-child {
+    padding-top: 10px;
+    border-top: 1px solid var(--background-modifier-border)
+}
+
+/* 单词项容器样式 */
+.word-list-item {
+    display: flex; /* 设置为水平布局 */
+    justify-content: space-between; /* 左右对齐 */
+    border-bottom: 1px solid var(--background-modifier-border);
+    position: relative; /* 为预览容器提供定位上下文 */
+}
+
+/* Markdown 预览容器样式 */
+.word-preview-inline {
+    font-size: 1em; /* 设置预览内容字体大小 */
+    line-height: 1.5; /* 设置行高 */
+    overflow-y: auto; /* 添加垂直滚动条 */
+    max-height: 300px; /* 设置最大高度 */
+    position: absolute; /* 设置绝对定位 */
+    top: 100%; /* 显示在单词项的下方 */
+    left: 0;
+    width: 100%;
+    z-index: 10; /* 确保预览内容在最上层 */
+    background-color: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 5px;
+    padding: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    display: none; /* 默认隐藏 */
+    user-select: text; /* 允许文本选择 */
+}
+
+/* 鼠标悬停时显示预览内容 */
+.word-text:hover .word-preview-inline {
+    display: block; /* 鼠标悬停时显示预览内容 */
+}
+
+/* 单词文本样式 */
+.word-text {
+    font-size: 1.1em;
+    color: var(--text-normal);
+    cursor: pointer;
+}
+
+/* 默写单词模态框样式 */
+.spelling-modal {
+    width: auto;
+    margin: 0 auto;
+    padding: 20px;
+    border-radius: 8px;
+    background-color: var(--background-primary);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.spelling-title {
+    font-size: 1.5em;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.input-container {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.letter-input {
+    width: 50px !important;
+    height: 50px !important;
+    text-align: center;
+    font-size: 1.5em !important;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 5px;
+    outline: none;
+}
+
+.feedback-container {
+    margin-top: 10px;
+    text-align: center;
+    font-size: 1em;
+    color: var(--text-accent);
+}
