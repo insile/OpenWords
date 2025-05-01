@@ -1,7 +1,7 @@
 ## OpenWords
 - 简介
 	- **OpenWords** 是一个用于背单词和单词管理的 [Obsidian](https://obsidian.md/) 简单插件, 插件入口是左侧工具栏的一个按钮加上两个命令. 使用 SuperMemo 2 间隔重复算法以及 OpenText 单词库. 依赖的第三方包主要是用于重复计算的 [supermemo](https://www.npmjs.com/package/supermemo) 和用于词形还原的 [wink-pos-tagger](https://www.npmjs.com/package/wink-pos-tagger). 本插件完全依赖单词文件及其属性, 没有表格, Json 等外部存储, 启动时会读取所有单词缓存属性, 并在更改时写入相应的单词文件, 没有设计过多的搜索功能, 可以使用内置的属性搜索单词 
-		- ![p7](p7.png)
+		- ![p7](README/p7.png)
 - 单词
 	- **单词库**以 [OpenText](opentext.net.cn) 为参考, 是 Obsidian 仓库中的一个文件夹, 其中按首字母分类储存所有单词文件, 单词即为文件名, 元数据使用文件 YAML 属性, 其中复选框和标签用于确定插件运行的作用域, 数字和日期是 SM 2 的计算参数
 		- 复选框: `掌握` , 确定插件作用域, 单词被掌握意味着不会被插件处理
@@ -28,7 +28,7 @@
 		- ![p4](README/p4.gif)
 	- 默写单词
 		- 从作用域中随机抽取单词进行拼写, 目前只是一个练习功能, 不会改变更改单词的属性, 按下 `Tab` 键显示答案
-		- ![](README/p8.gif)
+		- ![p8](README/p8.gif)
 	- 添加双链
 		- 为当前活动页面笔记中的单词添加双链, 单词范围是作用域中易记因子小于等于 2.5 的, 所以默认属性都是添加的. 准确率在 90 %. 需要文章尽可能规范, 减少不必要的标点符号. 目前只能通过 `ctrl z` 回撤
 		- ![p5](README/p5.gif)
