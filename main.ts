@@ -1,7 +1,8 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, TFile, Setting, TFolder, MarkdownRenderer, normalizePath } from 'obsidian';
-const posTagger = require( 'wink-pos-tagger' );
-const dayjs = require("dayjs");
+import { App, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, TFile, Setting, MarkdownRenderer, normalizePath } from 'obsidian';
+import posTagger from 'wink-pos-tagger';
+import dayjs from "dayjs";
 import { supermemo, SuperMemoItem, SuperMemoGrade } from 'supermemo';
+
 
 // 插件设置
 interface OpenWordsSettings {
@@ -48,7 +49,7 @@ export default class OpenWords extends Plugin {
 	allCards: Map<string, CardInfo> = new Map(); // 存储作用域单词的元数据
 	newCards: Map<string, CardInfo> = new Map(); // 存储新单词的元数据
 	dueCards: Map<string, CardInfo> = new Map(); // 存储旧单词的元数据
-	tagger = posTagger();  // 词性标注器实例
+	tagger = new posTagger();  // 词性标注器实例
 
 	// 插件加载时执行的操作
 	async onload() {
@@ -56,7 +57,7 @@ export default class OpenWords extends Plugin {
 		await this.loadSettings();
 		this.statusBarItem = this.addStatusBarItem();
 		this.addSettingTab(new OpenWordsSettingTab(this.app, this));
-		const ribbonIconEl = this.addRibbonIcon('slack', 'OpenWords', async (evt: MouseEvent) => {
+		this.addRibbonIcon('slack', 'OpenWords', async (evt: MouseEvent) => {
 			new LearningTypeModal(this.app, this).open();
 		});
 
@@ -198,7 +199,11 @@ export default class OpenWords extends Plugin {
 	async updateCard(card: CardInfo, grade: SuperMemoGrade) {
 		const result = supermemo(card, grade);
 		const newDate = dayjs().add(result.interval, 'day').format('YYYY-MM-DD');
-		const file = this.app.vault.getFileByPath(card.path) as TFile;
+		const file = this.app.vault.getFileByPath(card.path);
+		if (!file) {
+			new Notice(`文件 ${card.path} 不存在！`);
+			return;
+		}
 		this.newCards.delete(card.front);
 		this.dueCards.delete(card.front);
 		await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
@@ -221,7 +226,11 @@ export default class OpenWords extends Plugin {
 		let count = 0; // 计数器
 		const cardList = Array.from(this.allCards.values()); // 将 Map 转换为数组
 		for (const card of cardList) {
-			const file = this.app.vault.getFileByPath(card.path) as TFile;
+			const file = this.app.vault.getFileByPath(card.path);
+			if (!file) {
+				new Notice(`文件 ${card.path} 不存在！`);
+				continue;
+			}
 			await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
 				frontMatter.到期日 = dayjs().format('YYYY-MM-DD');
 				frontMatter.间隔 = 0;
@@ -230,7 +239,7 @@ export default class OpenWords extends Plugin {
 			});
 			count++; // 增加计数器
 			notice.setMessage(`重置中... ${count}/${this.allCards.size}`); // 更新 Notice 的消息
-		};
+		}
 		notice.setMessage(`重置完成！共 ${count} 个单词`); // 完成后更新消息
 		setTimeout(() => notice.hide(), 2000); // 2 秒后自动隐藏 Notice
 	}
@@ -257,17 +266,15 @@ export default class OpenWords extends Plugin {
 				if (doubleBracketMatch) { // 如果是双链格式
 					const innerWord = doubleBracketMatch[1]; // 获取双链中的名称
 					const alias = doubleBracketMatch[3]; // 获取双链中的别名
-					const doc = this.tagger.tagSentence(innerWord);
-					const lemma = doc[0].lemma
 					// 如果双链中的名称不在单词表中，去除双链，保留别名或名称
-					if (!unmasteredWords.has(lemma) && !unmasteredWords.has(innerWord)) {
+					if (!unmasteredWords.has(innerWord)) {
 						return alias; // 如果有别名，保留别名；否则保留名称
 					}
 					// 如果双链中的名称在单词表中，保持原样
 					return word;
 
 				} else { // 如果不是双链格式
-					const doc = this.tagger.tagSentence(word);
+					const doc = this.tagger.tagSentence(word.toLowerCase());
 					const lemma = doc[0]?.lemma ?? word.toLowerCase(); // 获取动词的原形
 					// 检查词干是否在单词表中
 					if (unmasteredWords.has(lemma)) {
@@ -465,8 +472,8 @@ export default class OpenWords extends Plugin {
 	// 覆盖写入文件
 	async writeFile(filePath: string, content: string) {
 		const existingFile = this.app.vault.getFileByPath(filePath);
-		if (existingFile) {
-			await this.app.vault.process(existingFile as TFile, () => content);
+		if (existingFile instanceof TFile) {
+			await this.app.vault.process(existingFile, () => content);
 		} else {
 			await this.app.vault.create(filePath, content);
 		}
@@ -481,15 +488,15 @@ export default class OpenWords extends Plugin {
 				backlinks[sourcePath] = links[file.path];
 			}
 		}
-		for (const [sourcePath, _] of Object.entries(backlinks)) {
+		for (const [sourcePath, ] of Object.entries(backlinks)) {
 			if (sourcePath.startsWith(this.settings.indexPath)) {
 				const sourceFile = this.app.vault.getFileByPath(sourcePath)
-				if (sourceFile) {
+				if (sourceFile instanceof TFile) {
 					const newWord = `- [${newCheckbox}] [[${file.basename}]]`;
 					const oldWord = `- [${oldCheckbox}] [[${file.basename}]]`;
-					await this.app.vault.process(sourceFile as TFile, (data) => data.replace(oldWord, newWord));
+					await this.app.vault.process(sourceFile, (data) => data.replace(oldWord, newWord));
 				}
-			};
+			}
 		}
 	}
 
@@ -685,7 +692,7 @@ class LearningTypeModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 
-        const title = contentEl.createDiv({ cls: 'type-title', text: '选择学习模式' });
+        contentEl.createDiv({ cls: 'type-title', text: '选择学习模式' });
 		const buttonContainer = contentEl.createDiv({ cls: 'type-button-grid' });
 
 		new Setting(buttonContainer)
@@ -832,7 +839,7 @@ class LearningModal extends Modal {
 		cardContainer.addEventListener('mouseenter', async () => {
 			if (isShowingMarkdown) return; // 如果已经显示 Markdown 内容，则不重复加载
 
-			const file = this.plugin.app.vault.getAbstractFileByPath(this.currentCard.path);
+			const file = this.plugin.app.vault.getFileByPath(this.currentCard.path);
 			if (file instanceof TFile) {
 				const markdownContent = await this.plugin.app.vault.read(file);
 
@@ -920,12 +927,12 @@ class WordListModal extends Modal {
 		this.modalEl.addClass('word-list-modal');
         const { contentEl } = this;
         contentEl.empty();
-        const title = contentEl.createDiv({ cls: 'word-list-title', text: '掌握列表' });
+        contentEl.createDiv({ cls: 'word-list-title', text: '掌握列表' });
         const filterContainer = contentEl.createDiv({ cls: 'word-list-filters' });
         const listContainer = contentEl.createDiv({ cls: 'word-list-container' });
 
         // 添加首字母筛选
-        const letterFilter = new Setting(filterContainer)
+        new Setting(filterContainer)
             .setName('首字母筛选')
             .addDropdown(dropdown => {
                 dropdown.addOption('', '全部');
@@ -941,7 +948,7 @@ class WordListModal extends Modal {
             });
 
         // 添加级别筛选
-        const levelFilter = new Setting(filterContainer)
+        new Setting(filterContainer)
             .setName('级别筛选')
             .addDropdown(dropdown => {
                 dropdown.addOption('', '全部');
@@ -970,15 +977,20 @@ class WordListModal extends Modal {
             return;
         }
 
+
         // 根据筛选条件过滤单词
         const filteredWords = Array.from(this.plugin.alllCards.values()).filter(card => {
-            const matchesLetter = this.selectedLetter
-                ? card.front.startsWith(this.selectedLetter.toLowerCase())
-                : true;
-            const matchesLevel = this.selectedLevel
-                ? this.plugin.app.metadataCache.getFileCache(this.plugin.app.vault.getAbstractFileByPath(card.path) as TFile)?.frontmatter?.tags?.includes(this.selectedLevel)
-                : true;
-            return matchesLetter && matchesLevel;
+
+			const file = this.plugin.app.vault.getFileByPath(card.path);
+			if (file instanceof TFile) {
+				const matchesLetter = this.selectedLetter
+					? card.front.startsWith(this.selectedLetter.toLowerCase())
+					: true;
+				const matchesLevel = this.selectedLevel
+					? this.plugin.app.metadataCache.getFileCache(file)?.frontmatter?.tags?.includes(this.selectedLevel)
+					: true;
+				return matchesLetter && matchesLevel;
+			}
         }).sort((a, b) => a.front.localeCompare(b.front)); // 按字母顺序排序
 
         // 渲染单词列表
@@ -998,12 +1010,11 @@ class WordListModal extends Modal {
                 .addToggle(toggle => {
                     toggle.setValue(card.isMastered) // 设置初始复选框状态
                         .onChange(async (value) => {
+							const file = this.plugin.app.vault.getFileByPath(card.path);
+							if (!(file instanceof TFile)) return; // 如果文件不存在，直接返回
                             // 更新单词的掌握状态
                             await this.plugin.app.fileManager.processFrontMatter(
-                                this.plugin.app.vault.getAbstractFileByPath(card.path) as TFile,
-                                (frontMatter) => {
-                                    frontMatter.掌握 = value;
-                                }
+                                file, (frontMatter) => {frontMatter.掌握 = value;}
                             );
                             new Notice(`单词 "${card.front}" 已更新为 ${value ? '掌握' : '未掌握'}`);
                         });
@@ -1013,7 +1024,7 @@ class WordListModal extends Modal {
 
 			// 添加鼠标悬停事件以渲染 Markdown 内容
 			wordText.addEventListener('mouseenter', async () => {
-				const file = this.plugin.app.vault.getAbstractFileByPath(card.path);
+				const file = this.plugin.app.vault.getFileByPath(card.path);
 				if (file instanceof TFile) {
 					const markdownContent = await this.plugin.app.vault.read(file);
 					previewContainer.empty();
@@ -1078,7 +1089,7 @@ class SpellingModal extends Modal {
 				title.setText('默写单词'); // 恢复标题
 			}
 		};
-	    window.addEventListener('keydown', handleKeydown);
+		window.addEventListener('keydown', handleKeydown);
 		window.addEventListener('keyup', handleKeyup);
 		this.onClose = () => {
 			window.removeEventListener('keydown', handleKeydown);
@@ -1102,7 +1113,7 @@ class SpellingModal extends Modal {
         this.currentCard = cards[Math.floor(Math.random() * cards.length)];
 
         // 渲染单词的词义
-        const file = this.plugin.app.vault.getAbstractFileByPath(this.currentCard.path);
+        const file = this.plugin.app.vault.getFileByPath(this.currentCard.path);
         if (file instanceof TFile) {
             const content = await this.plugin.app.vault.read(file);
             const match = content.match(/##### 词义\n(?:- .*\n?)*/g);
