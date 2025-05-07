@@ -7,15 +7,8 @@ If your plugin does not need CSS, delete this file.
 
 */
 
-/* 学习模式标题 */
-.type-title {
-    text-align: center;
-    margin-bottom: 20px;
-    font-size: 1.5em;
-    font-weight: bold;
-}
 
-/* 设置 */
+/* 插件设置选项卡 */
 .openwords-toggle-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr); /* 每行 4 列 */
@@ -27,9 +20,17 @@ If your plugin does not need CSS, delete this file.
     border-top: 1px solid var(--background-modifier-border)
 }
 
+/* 学习模式模态框 */
+.type-title {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 1.5em;
+    font-weight: bold;
+}
 .type-modal{
     width: 650px; /* 设置模态框宽度 */
 }
+
 /* 卡片容器样式 */
 .anki-card {
     width: 500px; /* 固定宽度 */

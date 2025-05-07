@@ -1,7 +1,7 @@
 import { App, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, TFile, Setting, MarkdownRenderer, normalizePath } from 'obsidian';
+import { supermemo, SuperMemoItem, SuperMemoGrade } from 'supermemo';
 import posTagger from 'wink-pos-tagger';
 import dayjs from "dayjs";
-import { supermemo, SuperMemoItem, SuperMemoGrade } from 'supermemo';
 
 
 // 插件设置
@@ -45,8 +45,8 @@ export default class OpenWords extends Plugin {
 	settings: OpenWordsSettings;  // 插件设置
 	settingsSnapshot: OpenWordsSettings;  // 插件设置快照
 	statusBarItem: HTMLElement;  // 状态栏元素
-	alllCards: Map<string, CardInfo> = new Map(); // 存储所有单词的元数据
-	allCards: Map<string, CardInfo> = new Map(); // 存储作用域单词的元数据
+	allCards: Map<string, CardInfo> = new Map(); // 存储所有单词的元数据
+	enabledCards: Map<string, CardInfo> = new Map(); // 存储作用域单词的元数据
 	newCards: Map<string, CardInfo> = new Map(); // 存储新单词的元数据
 	dueCards: Map<string, CardInfo> = new Map(); // 存储旧单词的元数据
 	tagger = new posTagger();  // 词性标注器实例
@@ -57,7 +57,7 @@ export default class OpenWords extends Plugin {
 		await this.loadSettings();
 		this.statusBarItem = this.addStatusBarItem();
 		this.addSettingTab(new OpenWordsSettingTab(this.app, this));
-		this.addRibbonIcon('slack', 'OpenWords', async (evt: MouseEvent) => {
+		this.addRibbonIcon('slack', 'OpenWords', async () => {
 			new LearningTypeModal(this.app, this).open();
 		});
 
@@ -89,9 +89,10 @@ export default class OpenWords extends Plugin {
 			this.registerEvent(this.app.vault.on("delete", (file: TFile) => {
 				if (file.path.endsWith(".md") && file.path.startsWith(this.settings.folderPath)) {
 					this.allCards.delete(file.basename);
+					this.enabledCards.delete(file.basename);
 					this.newCards.delete(file.basename);
 					this.dueCards.delete(file.basename);
-				this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} = ${this.allCards.size}`);
+				this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} = ${this.enabledCards.size}`);
 				}
 			}));
 			// 监听单词文件缓存修改事件
@@ -108,11 +109,12 @@ export default class OpenWords extends Plugin {
 	// 加载单词元数据
 	async loadWordMetadata(file: TFile) {
 		const allCards = this.allCards;
+		const enabledCards = this.enabledCards;
 		const newCards = this.newCards;
 		const dueCards = this.dueCards;
 
 		// 先删除旧的单词元数据
-		allCards.delete(file.basename);
+		enabledCards.delete(file.basename);
 		newCards.delete(file.basename);
 		dueCards.delete(file.basename);
 
@@ -126,8 +128,7 @@ export default class OpenWords extends Plugin {
 		}
 
 		const tags: string[] = frontMatter.tags || [];
-		const isMastered = frontMatter.掌握 === true;
-		console.log(frontMatter)
+		const isMastered = frontMatter["掌握"] === true;
 		const isEnabled =
 			(this.settings.enableWords1 && tags.includes('级别/小学')) ||
 			(this.settings.enableWords2 && tags.includes('级别/中考')) ||
@@ -141,20 +142,20 @@ export default class OpenWords extends Plugin {
 		const card: CardInfo = {
 			front: file.basename,
 			path: file.path,
-			dueDate: frontMatter.到期日,
-			interval: frontMatter.间隔,
-			efactor: frontMatter.易记因子 * 0.01,
-			repetition: frontMatter.重复次数,
+			dueDate: frontMatter["到期日"],
+			interval: frontMatter["间隔"],
+			efactor: frontMatter["易记因子"] * 0.01,
+			repetition: frontMatter["重复次数"],
 			isMastered: isMastered,
 		};
 
-		const isMasteredOld = this.alllCards.get(card.front)?.isMastered;
-		this.alllCards.set(card.front, card);
+		const isMasteredOld = allCards.get(card.front)?.isMastered;
+		allCards.set(card.front, card);
 
 		// 再添加新的单词元数据
 		if (isEnabled && !isMastered) {
-			allCards.set(card.front, card);
-			if (frontMatter.重复次数 === 0) {
+			enabledCards.set(card.front, card);
+			if (frontMatter["重复次数"] === 0) {
 				newCards.set(card.front, card);
 			} else {
 				dueCards.set(card.front, card);
@@ -165,33 +166,32 @@ export default class OpenWords extends Plugin {
 		if (isMastered !== isMasteredOld && isMasteredOld !== undefined) {
 			const newCheckbox = isMastered ? 'x' : ' ';
 			const oldCheckbox = isMasteredOld ? 'x' : ' ';
-			console.log(file, newCheckbox, oldCheckbox)
 			await this.syncMetadataToCheckbox(file, newCheckbox, oldCheckbox);
 		}
 
-		this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} = ${this.allCards.size}`);
+		this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} = ${this.enabledCards.size}`);
 	}
 
 	// 扫描所有单词文件
 	async scanAllNotes() {
-		this.alllCards.clear();
 		this.allCards.clear();
+		this.enabledCards.clear();
 		this.newCards.clear();
 		this.dueCards.clear();
 		const files = this.app.vault.getMarkdownFiles();
 		const filteredFiles = files.filter(file => file.path.startsWith(this.settings.folderPath));
 		if (filteredFiles.length === 0) {
 			new Notice('指定的文件夹下没有 Markdown 文件！');
-			this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} = ${this.allCards.size}`);
+			this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} = ${this.enabledCards.size}`);
 			return;
 		}
 		const notice = new Notice('缓存中...', 0); // 创建一个持续显示的 Notice
 
 		await Promise.all(filteredFiles.map(async (file) => {
 			await this.loadWordMetadata(file);
-			notice.setMessage(`缓存中... ${this.allCards.size}/${filteredFiles.length}`); // 更新 Notice 的消息
+			notice.setMessage(`缓存中... ${this.enabledCards.size}/${filteredFiles.length}`); // 更新 Notice 的消息
 		}));
-		notice.setMessage(`缓存完成！共 ${this.allCards.size} 个单词`); // 完成后更新消息
+		notice.setMessage(`缓存完成！共 ${this.enabledCards.size} 个单词`); // 完成后更新消息
 		setTimeout(() => notice.hide(), 2000); // 2 秒后自动隐藏 Notice
 	}
 
@@ -207,10 +207,10 @@ export default class OpenWords extends Plugin {
 		this.newCards.delete(card.front);
 		this.dueCards.delete(card.front);
 		await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
-			frontMatter.到期日 = newDate;
-			frontMatter.间隔 = result.interval;
-			frontMatter.易记因子 = Math.round(result.efactor * 100);
-			frontMatter.重复次数 = result.repetition;
+			frontMatter["到期日"] = newDate;
+			frontMatter["间隔"] = result.interval;
+			frontMatter["易记因子"] = Math.round(result.efactor * 100);
+			frontMatter["重复次数"] = result.repetition;
 		});
 		new Notice(`${card.front} \n易记因子: ${result.efactor.toFixed(2)} \n重复次数: ${result.repetition} \n间隔: ${result.interval} \n到期日: ${newDate}`);
 
@@ -218,13 +218,13 @@ export default class OpenWords extends Plugin {
 
 	// 重置单词属性
 	async resetCard() {
-		if (this.allCards.size === 0) {
+		if (this.enabledCards.size === 0) {
 			new Notice("没有单词需要重置！");
 			return;
 		}
 		const notice = new Notice('重置中...', 0); // 创建一个持续显示的 Notice
 		let count = 0; // 计数器
-		const cardList = Array.from(this.allCards.values()); // 将 Map 转换为数组
+		const cardList = Array.from(this.enabledCards.values()); // 将 Map 转换为数组
 		for (const card of cardList) {
 			const file = this.app.vault.getFileByPath(card.path);
 			if (!file) {
@@ -232,13 +232,13 @@ export default class OpenWords extends Plugin {
 				continue;
 			}
 			await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
-				frontMatter.到期日 = dayjs().format('YYYY-MM-DD');
-				frontMatter.间隔 = 0;
-				frontMatter.易记因子 = 250;
-				frontMatter.重复次数 = 0;
+				frontMatter["到期日"] = dayjs().format('YYYY-MM-DD');
+				frontMatter["间隔"] = 0;
+				frontMatter["易记因子"] = 250;
+				frontMatter["重复次数"] = 0;
 			});
 			count++; // 增加计数器
-			notice.setMessage(`重置中... ${count}/${this.allCards.size}`); // 更新 Notice 的消息
+			notice.setMessage(`重置中... ${count}/${this.enabledCards.size}`); // 更新 Notice 的消息
 		}
 		notice.setMessage(`重置完成！共 ${count} 个单词`); // 完成后更新消息
 		setTimeout(() => notice.hide(), 2000); // 2 秒后自动隐藏 Notice
@@ -246,7 +246,7 @@ export default class OpenWords extends Plugin {
 
 	// 建立单词双链
 	async addDoubleBrackets() {
-		const unmasteredWords = new Set(Array.from(this.allCards.values())
+		const unmasteredWords = new Set(Array.from(this.enabledCards.values())
 			.filter(card => card.efactor <= 2.5)
 			.map(card => card.front)
 		);
@@ -305,7 +305,6 @@ export default class OpenWords extends Plugin {
 
 		// 创建索引文件夹 (如果不存在)
 		const existingIndexFolder = this.app.vault.getFolderByPath(indexDir);
-		console.log(indexDir,existingIndexFolder)
 		if (!existingIndexFolder) {
 			await this.app.vault.createFolder(indexDir);
 		}
@@ -321,7 +320,7 @@ export default class OpenWords extends Plugin {
 			const frontMatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
 			if (!frontMatter) continue; // 如果没有 FrontMatter，跳过
 			const tags: string[] = frontMatter.tags || [];
-			const isMastered = frontMatter?.掌握 === true;
+			const isMastered = frontMatter["掌握"] === true;
 			for (const level of levels) {
 				if (tags.includes(level)) {
 					const letter = file.basename[0].toUpperCase(); // 获取单词首字母
@@ -449,7 +448,7 @@ export default class OpenWords extends Plugin {
 			`|                 | [n.](单词索引.名词) | [v.](单词索引.动词) | [adj.](单词索引.形容词) | [adv.](单词索引.副词) | [prep.](单词索引.介词) | [pron.](单词索引.代词) | [det.](单词索引.限定词) | [conj.](单词索引.连词) |`,
 			`| :--------------: | :------------: | :------------: | :---------------: | :--------------: | :---------------: | :---------------: | :---------------: | :---------------: |`,
 			`| [全索引](单词索引.全索引) | [小学](单词索引.小学) | [中考](单词索引.中考) | [高四](单词索引.高考四级)  | [考研](单词索引.考研)   | [六级](单词索引.六级)    | [雅思](单词索引.雅思)    | [托福](单词索引.托福)    | [GRE](单词索引.GRE)  |`,
-			`| ${this.alllCards.size}           | ${totalWordsList["级别/小学"]}           | ${totalWordsList["级别/中考"]}          | ${totalWordsList["级别/高考四级"]}             | ${totalWordsList["级别/考研"]}             | ${totalWordsList["级别/六级"]}             | ${totalWordsList["级别/雅思"]}             | ${totalWordsList["级别/托福"]}             | ${totalWordsList["级别/GRE"]}             |`
+			`| ${this.allCards.size}           | ${totalWordsList["级别/小学"]}           | ${totalWordsList["级别/中考"]}          | ${totalWordsList["级别/高考四级"]}             | ${totalWordsList["级别/考研"]}             | ${totalWordsList["级别/六级"]}             | ${totalWordsList["级别/雅思"]}             | ${totalWordsList["级别/托福"]}             | ${totalWordsList["级别/GRE"]}             |`
 		];
 
 		// 定义字母索引行
@@ -698,36 +697,36 @@ class LearningTypeModal extends Modal {
 		new Setting(buttonContainer)
 			.setName(`学习新词 ( 重复次数为零, 剩余 ${this.plugin.newCards.size} )`)
 			.addButton(btn => btn
-			.setButtonText("开始")
-			.onClick(() => {
-				if (this.plugin.newCards.size > 0) {
-				this.close();
-				new LearningModal(this.app, this.plugin, 'new').open();
-				} else {
-				new Notice("没有新词可学了！");
-				}
+				.setButtonText("开始")
+				.onClick(() => {
+					if (this.plugin.newCards.size > 0) {
+					this.close();
+					new LearningModal(this.app, this.plugin, 'new').open();
+					} else {
+					new Notice("没有新词可学了！");
+					}
 			}));
 
 		new Setting(buttonContainer)
 			.setName(`复习旧词 ( 重复次数不为零, 剩余 ${this.plugin.dueCards.size} )`)
 			.addButton(btn => btn
-			.setButtonText("开始")
-			.onClick(() => {
-				if (this.plugin.dueCards.size > 0) {
-				this.close();
-				new LearningModal(this.app, this.plugin, 'review').open();
-				} else {
-				new Notice("没有需要复习的卡片！");
-				}
+				.setButtonText("开始")
+				.onClick(() => {
+					if (this.plugin.dueCards.size > 0) {
+					this.close();
+					new LearningModal(this.app, this.plugin, 'review').open();
+					} else {
+					new Notice("没有需要复习的卡片！");
+					}
 			}));
 
 		new Setting(buttonContainer)
 			.setName(`掌握列表 ( 所有单词 )`)
 			.addButton(btn => btn
-			.setButtonText("开始")
-			.onClick(() => {
-				this.close();
-				new WordListModal(this.app, this.plugin).open();
+				.setButtonText("开始")
+				.onClick(() => {
+					this.close();
+					new WordListModal(this.app, this.plugin).open();
 			}));
 
 		new Setting(buttonContainer)
@@ -737,16 +736,16 @@ class LearningTypeModal extends Modal {
 				.onClick(() => {
 					this.close();
 					new SpellingModal(this.app, this.plugin).open();
-				}));
+			}));
 
 		new Setting(buttonContainer)
 			.setName(`添加双链 ( 作用域中易记因子 <= 2.5 )`)
 			.addButton(btn => btn
-			.setButtonText("开始")
-			.onClick(() => {
-				this.close();
-				this.plugin.addDoubleBrackets();
-			}));
+				.setButtonText("开始")
+				.onClick(async () => {
+					this.close();
+					await this.plugin.addDoubleBrackets();
+				}));
 	}
 }
 
@@ -767,10 +766,10 @@ class LearningModal extends Modal {
 		this.render();
 
 		// 监听数字键 0-5 的按键事件
-		const handleKeydown = (event: KeyboardEvent) => {
+		const handleKeydown = async (event: KeyboardEvent) => {
 			if (event.key >= '0' && event.key <= '5') {
 				const grade = parseInt(event.key) as SuperMemoGrade;
-				this.rateCard(grade);
+				await this.rateCard(grade);
 			}
 		};
 
@@ -979,7 +978,7 @@ class WordListModal extends Modal {
 
 
         // 根据筛选条件过滤单词
-        const filteredWords = Array.from(this.plugin.alllCards.values()).filter(card => {
+        const filteredWords = Array.from(this.plugin.allCards.values()).filter(card => {
 
 			const file = this.plugin.app.vault.getFileByPath(card.path);
 			if (file instanceof TFile) {
@@ -1014,7 +1013,7 @@ class WordListModal extends Modal {
 							if (!(file instanceof TFile)) return; // 如果文件不存在，直接返回
                             // 更新单词的掌握状态
                             await this.plugin.app.fileManager.processFrontMatter(
-                                file, (frontMatter) => {frontMatter.掌握 = value;}
+                                file, (frontMatter) => {frontMatter["掌握"] = value;}
                             );
                             new Notice(`单词 "${card.front}" 已更新为 ${value ? '掌握' : '未掌握'}`);
                         });
@@ -1072,7 +1071,7 @@ class SpellingModal extends Modal {
         const feedbackContainer = contentEl.createDiv({ cls: 'feedback-container' });
 
         // 初始化第一个单词
-        this.pickNextCard(wordMeaningContainer, inputContainer, feedbackContainer);
+        await this.pickNextCard(wordMeaningContainer, inputContainer, feedbackContainer);
 
 		const handleKeydown = (event: KeyboardEvent) => {
 			if (event.key === 'Tab') {
@@ -1103,7 +1102,7 @@ class SpellingModal extends Modal {
         inputContainer: HTMLElement,
         feedbackContainer: HTMLElement
     ) {
-        const cards = Array.from(this.plugin.allCards.values());
+        const cards = Array.from(this.plugin.enabledCards.values());
         if (cards.length === 0) {
             feedbackContainer.setText('没有更多单词了！');
             return;
@@ -1179,9 +1178,9 @@ class SpellingModal extends Modal {
         if (userInput.length === word.length) {
             if (userInput.toLowerCase() === word.toLowerCase()) {
                 feedbackContainer.setText('正确！');
-                setTimeout(() => {
-                    this.pickNextCard(wordMeaningContainer, inputContainer, feedbackContainer);
-                }, 500);
+                setTimeout(async () => {
+					await this.pickNextCard(wordMeaningContainer, inputContainer, feedbackContainer);
+				}, 500);
             } else {
                 feedbackContainer.setText('错误，请重试！');
                 inputFields.forEach((field) => (field.value = '')); // 清空所有输入框
