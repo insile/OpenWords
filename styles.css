@@ -21,18 +21,18 @@ If your plugin does not need CSS, delete this file.
 }
 
 /* 学习模式模态框 */
-.type-title {
+.openwords-type-title {
     text-align: center;
     margin-bottom: 20px;
     font-size: 1.5em;
     font-weight: bold;
 }
-.type-modal{
+.openwords-type-modal{
     width: 650px; /* 设置模态框宽度 */
 }
 
-/* 卡片容器样式 */
-.anki-card {
+/* 背单词模态框 */
+.openwords-card { /* 卡片容器样式 */
     width: 500px; /* 固定宽度 */
     height: 300px; /* 固定高度 */
     display: flex;
@@ -45,19 +45,17 @@ If your plugin does not need CSS, delete this file.
     text-align: center;
     cursor: pointer; /* 鼠标悬停时显示手型 */
 }
-.anki-card:hover {
+.openwords-card:hover {
     background-color: var(--background-modifier-hover); /* 鼠标悬停时背景变浅 */
 }
 
-/* 单词内容样式 */
-.anki-card-content {
+.openwords-card-content { /* 单词内容样式 */
     font-size: 2.5em; /* 设置单词字体大小 */
     font-weight: bold; /* 设置单词加粗 */
     color: var(--text-normal); /* 设置单词颜色 */
 }
 
-/* Markdown 内容样式 */
-.anki-markdown-content {
+.openwords-card-markdown { /* Markdown 内容样式 */
     width: 100%;
     height: 100%;
     overflow-y: auto; /* 添加垂直滚动条 */
@@ -71,56 +69,52 @@ If your plugin does not need CSS, delete this file.
     user-select: text; /* 允许文本选择 */
 }
 
-/* 设置容器样式 */
-.anki-settings {
-    margin-top: 20px;
+.openwords-card-settings {
+    margin-top: 20px; /* 设置容器样式 */
     font-size: 1em; /* 减小字体大小 */
 }
 
-.anki-settings .setting-item {
+.openwords-card-settings .setting-item {
     padding: 5px 10px; /* 减小内边距 */
 }
 
-
 /* 单词列表模态框 */
-.word-list-modal{
+.openwords-list{
     width: 400px;
 }
 
-.word-list-title {
+.openwords-list-title {
     font-size: 1.5em;
     font-weight: bold;
     margin-bottom: 1em;
     text-align: center;
 }
 
-.word-list-filters {
+.openwords-list-filters {
     display: flex;
     justify-content: space-between;
     margin-bottom: 1em;
 }
 
-.word-list-container {
+.openwords-list-container {
     display: flex;
     flex-direction: column;
     gap: 0.5em;
 }
 
-.word-list-filters .setting-item:first-child {
+.openwords-list-filters .setting-item:first-child {
     padding-top: 10px;
     border-top: 1px solid var(--background-modifier-border)
 }
 
-/* 单词项容器样式 */
-.word-list-item {
+.openwords-list-item { /* 单词项容器样式 */
     display: flex; /* 设置为水平布局 */
     justify-content: space-between; /* 左右对齐 */
     border-bottom: 1px solid var(--background-modifier-border);
     position: relative; /* 为预览容器提供定位上下文 */
 }
 
-/* Markdown 预览容器样式 */
-.word-preview-inline {
+.openwords-list-preview { /* Markdown 预览容器样式 */
     font-size: 1em; /* 设置预览内容字体大小 */
     line-height: 1.5; /* 设置行高 */
     overflow-y: auto; /* 添加垂直滚动条 */
@@ -139,20 +133,18 @@ If your plugin does not need CSS, delete this file.
     user-select: text; /* 允许文本选择 */
 }
 
-/* 鼠标悬停时显示预览内容 */
-.word-text:hover .word-preview-inline {
+.openwords-list-text:hover .openwords-list-preview { /* 鼠标悬停时显示预览内容 */
     display: block; /* 鼠标悬停时显示预览内容 */
 }
 
-/* 单词文本样式 */
-.word-text {
+.openwords-list-text { /* 单词文本样式 */
     font-size: 1.1em;
     color: var(--text-normal);
     cursor: pointer;
 }
 
-/* 默写单词模态框样式 */
-.spelling-modal {
+/* 默写单词模态框 */
+.openwords-spelling {
     width: auto;
     margin: 0 auto;
     padding: 20px;
@@ -161,21 +153,21 @@ If your plugin does not need CSS, delete this file.
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
-.spelling-title {
+.openwords-spelling-title {
     font-size: 1.5em;
     font-weight: bold;
     text-align: center;
     margin-bottom: 20px;
 }
 
-.input-container {
+.openwords-spelling-input {
     display: flex;
     justify-content: center;
     gap: 10px;
     margin-bottom: 20px;
 }
 
-.letter-input {
+.openwords-spelling-letter {
     width: 50px !important;
     height: 50px !important;
     text-align: center;
@@ -185,7 +177,7 @@ If your plugin does not need CSS, delete this file.
     outline: none;
 }
 
-.feedback-container {
+.openwords-spelling-feedback {
     margin-top: 10px;
     text-align: center;
     font-size: 1em;
