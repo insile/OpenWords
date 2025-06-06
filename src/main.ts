@@ -1,10 +1,9 @@
-import { MarkdownView, Notice, Plugin, TFile, normalizePath } from 'obsidian';
+import { MarkdownView, Notice, Plugin, TFile, normalizePath, moment } from 'obsidian';
 import { supermemo, SuperMemoGrade } from 'supermemo';
 import { OpenWordsSettingTab } from './settings';
 import { LearningTypeModal } from './modals/LearningTypeModal';
 import { CardInfo } from './card';
 import posTagger from 'wink-pos-tagger';
-import moment from 'moment';
 
 
 // 插件设置
@@ -42,7 +41,7 @@ export default class OpenWords extends Plugin {
     settingsSnapshot: OpenWordsSettings;  // 插件设置快照
     statusBarItem: HTMLElement;  // 状态栏元素
     allCards: Map<string, CardInfo> = new Map(); // 存储所有单词的元数据
-	masterCards: Map<string, CardInfo> = new Map(); // 存储作用域单词的元数据
+    masterCards: Map<string, CardInfo> = new Map(); // 存储掌握单词的元数据
     enabledCards: Map<string, CardInfo> = new Map(); // 存储作用域单词的元数据
     newCards: Map<string, CardInfo> = new Map(); // 存储新单词的元数据
     dueCards: Map<string, CardInfo> = new Map(); // 存储旧单词的元数据
@@ -86,6 +85,7 @@ export default class OpenWords extends Plugin {
             this.registerEvent(this.app.vault.on("delete", (file: TFile) => {
                 if (file.path.endsWith(".md") && file.path.startsWith(this.settings.folderPath)) {
                     this.allCards.delete(file.basename);
+                    this.masterCards.delete(file.basename);
                     this.enabledCards.delete(file.basename);
                     this.newCards.delete(file.basename);
                     this.dueCards.delete(file.basename);

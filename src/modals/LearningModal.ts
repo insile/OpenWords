@@ -1,8 +1,7 @@
-import { App, Modal, Notice, TFile, Setting, MarkdownRenderer, Component } from 'obsidian';
+import { App, Modal, Notice, TFile, Setting, MarkdownRenderer, Component, moment } from 'obsidian';
 import { SuperMemoGrade } from 'supermemo';
 import { CardInfo } from '../card';
 import OpenWords from '../main';
-import moment from 'moment';
 
 
 // 背单词模态框
