@@ -1,4 +1,4 @@
-import { App, Modal, Notice, TFile, Setting, MarkdownRenderer, Component, moment } from 'obsidian';
+import { App, Modal, Notice, TFile, Setting, MarkdownRenderer, Component } from 'obsidian';
 import { SuperMemoGrade } from 'supermemo';
 import { CardInfo } from '../card';
 import OpenWords from '../main';
@@ -74,7 +74,7 @@ export class LearningModal extends Modal {
     }
 
     pickNextCard() {
-        const now = moment(); // 获取当前时间
+        const now = window.moment(); // 获取当前时间
         let pool: CardInfo[];
 
         // 新词池是指所有新词, 旧词池是指所有已过期的旧词
@@ -87,7 +87,7 @@ export class LearningModal extends Modal {
             }
         } else {
             pool = Array.from(this.plugin.dueCards.values())
-                .filter(card => moment(card.dueDate).isBefore(now)) // 筛选已过期的单词
+                .filter(card => window.moment(card.dueDate).isBefore(now)) // 筛选已过期的单词
             if (pool.length === 0) {
                 this.close();
                 new Notice("没有需要复习的卡片！");

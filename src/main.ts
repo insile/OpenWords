@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Plugin, TFile, normalizePath, moment } from 'obsidian';
+import { MarkdownView, Notice, Plugin, TFile, normalizePath } from 'obsidian';
 import { supermemo, SuperMemoGrade } from 'supermemo';
 import { OpenWordsSettingTab } from './settings';
 import { LearningTypeModal } from './modals/LearningTypeModal';
@@ -201,7 +201,7 @@ export default class OpenWords extends Plugin {
     // 更新单词属性
     async updateCard(card: CardInfo, grade: SuperMemoGrade) {
         const result = supermemo(card, grade);
-        const newDate = moment().add(result.interval, 'day').format('YYYY-MM-DD');
+        const newDate = window.moment().add(result.interval, 'day').format('YYYY-MM-DD');
         const file = this.app.vault.getFileByPath(card.path);
         if (!file) {
             new Notice(`文件 ${card.path} 不存在！`);
@@ -235,7 +235,7 @@ export default class OpenWords extends Plugin {
                 continue;
             }
             await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
-                frontMatter["到期日"] = moment().format('YYYY-MM-DD');
+                frontMatter["到期日"] = window.moment().format('YYYY-MM-DD');
                 frontMatter["间隔"] = 0;
                 frontMatter["易记因子"] = 250;
                 frontMatter["重复次数"] = 0;
