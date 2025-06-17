@@ -40,12 +40,12 @@ export default class OpenWords extends Plugin {
     settings: OpenWordsSettings;  // 插件设置
     settingsSnapshot: OpenWordsSettings;  // 插件设置快照
     statusBarItem: HTMLElement;  // 状态栏元素
-    allCards: Map<string, CardInfo> = new Map(); // 存储所有单词的元数据
-    masterCards: Map<string, CardInfo> = new Map(); // 存储掌握单词的元数据
-    enabledCards: Map<string, CardInfo> = new Map(); // 存储作用域单词的元数据
-    newCards: Map<string, CardInfo> = new Map(); // 存储新单词的元数据
-    dueCards: Map<string, CardInfo> = new Map(); // 存储旧单词的元数据
-    tagger = new posTagger();  // 词性标注器实例
+	tagger: posTagger = new posTagger();  // 词性标注器实例
+    allCards: Map<string, CardInfo> = new Map(); // 所有单词
+    masterCards: Map<string, CardInfo> = new Map(); // 掌握单词
+    enabledCards: Map<string, CardInfo> = new Map(); // 启用单词
+    newCards: Map<string, CardInfo> = new Map(); // 新单词
+    dueCards: Map<string, CardInfo> = new Map(); // 旧单词
 
     // 插件加载时执行的操作
     async onload() {
@@ -89,7 +89,7 @@ export default class OpenWords extends Plugin {
                     this.enabledCards.delete(file.basename);
                     this.newCards.delete(file.basename);
                     this.dueCards.delete(file.basename);
-                this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} + ${this.allCards.size-this.enabledCards.size} = ${this.allCards.size}`);
+				this.updateStatusBar()
                 }
             }));
             // 监听单词文件缓存修改事件
@@ -128,7 +128,7 @@ export default class OpenWords extends Plugin {
 
         const tags: string[] = frontMatter.tags || [];
         const isMastered = frontMatter["掌握"] === true;
-        const isEnabled =
+        const isTagged =
             (this.settings.enableWords1 && tags.includes('级别/小学')) ||
             (this.settings.enableWords2 && tags.includes('级别/中考')) ||
             (this.settings.enableWords3 && tags.includes('级别/高考四级')) ||
@@ -149,10 +149,17 @@ export default class OpenWords extends Plugin {
         };
 
         const isMasteredOld = allCards.get(card.front)?.isMastered;
-        allCards.set(card.front, card);
 
-        // 再添加新的单词元数据
-        if (isEnabled && !isMastered) {
+		// 更新所有单词
+		allCards.set(card.front, card);
+
+		// 更新掌握单词
+		if (isMastered) {
+			masterCards.set(card.front, card);
+		}
+
+        // 更新启用单词, 新单词, 旧单词
+        if (isTagged && !isMastered) {
             enabledCards.set(card.front, card);
             if (frontMatter["重复次数"] === 0) {
                 newCards.set(card.front, card);
@@ -161,10 +168,6 @@ export default class OpenWords extends Plugin {
             }
         }
 
-		if (isMastered) {
-			masterCards.set(card.front, card);
-		}
-
         // 如果掌握状态发生变化，更新复选框
         if (isMastered !== isMasteredOld && isMasteredOld !== undefined) {
             const newCheckbox = isMastered ? 'x' : ' ';
@@ -172,30 +175,31 @@ export default class OpenWords extends Plugin {
             await this.syncMetadataToCheckbox(file, newCheckbox, oldCheckbox);
         }
 
-		this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} + ${this.allCards.size-this.enabledCards.size} = ${this.allCards.size}`);
+		this.updateStatusBar()
     }
 
     // 扫描所有单词文件
     async scanAllNotes() {
         this.allCards.clear();
+		this.masterCards.clear();
         this.enabledCards.clear();
         this.newCards.clear();
         this.dueCards.clear();
+
         const files = this.app.vault.getMarkdownFiles();
         const filteredFiles = files.filter(file => file.path.startsWith(this.settings.folderPath));
+
         if (filteredFiles.length === 0) {
             new Notice('指定的文件夹下没有 Markdown 文件！');
-			this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} + ${this.allCards.size-this.enabledCards.size} = ${this.allCards.size}`);
+			this.updateStatusBar()
             return;
         }
-        const notice = new Notice('扫描中...', 0); // 创建一个持续显示的 Notice
 
         await Promise.all(filteredFiles.map(async (file) => {
             await this.loadWordMetadata(file);
-            notice.setMessage(`扫描中... ${this.enabledCards.size}/${filteredFiles.length}`); // 更新 Notice 的消息
         }));
-        notice.setMessage(`扫描完成！共 ${this.newCards.size} + ${this.dueCards.size} + ${this.allCards.size-this.enabledCards.size} = ${this.allCards.size} 个单词`); // 完成后更新消息
-        setTimeout(() => notice.hide(), 2000); // 2 秒后自动隐藏 Notice
+
+        new Notice(`扫描完成！共 ${this.allCards.size} 个单词`); // 完成后更新消息
     }
 
     // 更新单词属性
@@ -203,20 +207,23 @@ export default class OpenWords extends Plugin {
         const result = supermemo(card, grade);
         const newDate = window.moment().add(result.interval, 'day').format('YYYY-MM-DD');
         const file = this.app.vault.getFileByPath(card.path);
-        if (!file) {
+
+		if (!file) {
             new Notice(`文件 ${card.path} 不存在！`);
             return;
         }
-        this.newCards.delete(card.front);
-        this.dueCards.delete(card.front);
+
+
         await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
             frontMatter["到期日"] = newDate;
             frontMatter["间隔"] = result.interval;
             frontMatter["易记因子"] = Math.round(result.efactor * 100);
             frontMatter["重复次数"] = result.repetition;
         });
-        new Notice(`${card.front} \n易记因子: ${result.efactor.toFixed(2)} \n重复次数: ${result.repetition} \n间隔: ${result.interval} \n到期日: ${newDate}`);
 
+		new Notice(`${card.front} \n易记因子: ${result.efactor.toFixed(2)} \n重复次数: ${result.repetition} \n间隔: ${result.interval} \n到期日: ${newDate}`);
+
+		await new Promise(resolve => setTimeout(resolve, 200))
     }
 
     // 重置单词属性
@@ -446,7 +453,7 @@ export default class OpenWords extends Plugin {
         const finalIndexPath = `${indexDir}/英语单词.md`;
         // 定义表头
         const header = [
-            `##### [[英语单词说明|英语单词]]`,
+            `##### 英语单词`,
             ``,
             `|                 | [n.](单词索引.名词) | [v.](单词索引.动词) | [adj.](单词索引.形容词) | [adv.](单词索引.副词) | [prep.](单词索引.介词) | [pron.](单词索引.代词) | [det.](单词索引.限定词) | [conj.](单词索引.连词) |`,
             `| :--------------: | :------------: | :------------: | :---------------: | :--------------: | :---------------: | :---------------: | :---------------: | :---------------: |`,
@@ -464,7 +471,7 @@ export default class OpenWords extends Plugin {
         }
 
         // 合并表头和字母索引行
-        const finalContent = [...header, ...alphabetRows].join('\n');
+        const finalContent = [...header, ...alphabetRows].join('\n')+'\n';
         await this.writeFile(finalIndexPath, finalContent); // 写入索引文件
 
         notice.setMessage("索引生成完成！");
@@ -502,7 +509,11 @@ export default class OpenWords extends Plugin {
         }
     }
 
-    onunload() {
+    updateStatusBar(){
+		this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} + ${this.allCards.size-this.enabledCards.size} = ${this.allCards.size}`);
+	}
+
+	onunload() {
 
     }
 

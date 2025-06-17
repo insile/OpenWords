@@ -10,6 +10,8 @@ export class LearningModal extends Modal {
     component: Component;
     mode: 'new' | 'review';
     currentCard: CardInfo;
+	isRating: boolean = false;
+	currentRatingKey: string | null = null;
 
     constructor(app: App, plugin: OpenWords, mode: 'new' | 'review') {
         super(app);
@@ -65,11 +67,28 @@ export class LearningModal extends Modal {
         // 监听数字键 0-5 的按键事件
         const handleKeydown = async (event: KeyboardEvent) => {
             if (event.key >= '0' && event.key <= '5') {
+				if (this.isRating) return;
+				this.isRating = true;
+				this.currentRatingKey = event.key
                 const grade = parseInt(event.key) as SuperMemoGrade;
-                await this.rateCard(grade, cardContainer);
+				await this.plugin.updateCard(this.currentCard, grade);
             }
         };
+		const handleKeyup = async (event: KeyboardEvent) => {
+            if (
+				this.isRating &&
+				this.currentRatingKey !== null &&
+				event.key === this.currentRatingKey
+			) {
+				this.isRating=false
+				this.currentRatingKey = null
+				this.pickNextCard()
+				this.render(cardContainer)
+            }
+        };
+
         this.plugin.registerDomEvent(contentEl, 'keydown', handleKeydown);
+        this.plugin.registerDomEvent(contentEl, 'keyup', handleKeyup);
 
     }
 
@@ -157,9 +176,12 @@ export class LearningModal extends Modal {
     }
 
     async rateCard(grade: SuperMemoGrade, cardContainer: HTMLDivElement) {
+		if (this.isRating) return;
+		this.isRating = true;
         await this.plugin.updateCard(this.currentCard, grade);
         this.pickNextCard();
         this.render(cardContainer);
+		this.isRating = false;
     }
 
     onClose() {

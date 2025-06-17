@@ -36,7 +36,8 @@ export class LearningTypeModal extends Modal {
             }));
 
         new Setting(buttonContainer)
-            .setName(`复习旧词 ( 重复次数不为零, 剩余 ${this.plugin.dueCards.size} )`)
+            .setName(`复习旧词 ( 重复次数不为零, 共计 ${this.plugin.dueCards.size}, 过期 ${Array.from(this.plugin.dueCards.values())
+				.filter(card => window.moment(card.dueDate).isBefore(window.moment())).length} )`)
             .addButton(btn => btn
                 .setButtonText("开始")
                 .onClick(() => {
@@ -58,7 +59,7 @@ export class LearningTypeModal extends Modal {
             }));
 
         new Setting(buttonContainer)
-            .setName('默写单词 ( 作用域单词 )')
+            .setName('默写单词 ( 启用单词 )')
             .addButton(btn => btn
                 .setButtonText('开始')
                 .onClick(() => {
@@ -67,12 +68,12 @@ export class LearningTypeModal extends Modal {
             }));
 
         new Setting(buttonContainer)
-            .setName(`添加双链 ( 作用域中易记因子 <= 2.5 )`)
+            .setName(`添加双链 ( 启用单词中易记因子 <= 2.5 )`)
             .addButton(btn => btn
                 .setButtonText("开始")
                 .onClick(async () => {
                     this.close();
                     await this.plugin.addDoubleBrackets();
-                }));
+			}));
     }
 }
