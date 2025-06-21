@@ -59,7 +59,7 @@ export class LearningTypeModal extends Modal {
             }));
 
         new Setting(buttonContainer)
-            .setName('默写单词 ( 启用单词 )')
+            .setName('默写单词 ( 重复次数不为零 )')
             .addButton(btn => btn
                 .setButtonText('开始')
                 .onClick(() => {
@@ -68,7 +68,7 @@ export class LearningTypeModal extends Modal {
             }));
 
         new Setting(buttonContainer)
-            .setName(`添加双链 ( 启用单词中易记因子 <= 2.5 )`)
+            .setName(`添加双链 ( 启用单词中易记因子 <= ${this.plugin.settings.maxEfactorForLink} )`)
             .addButton(btn => btn
                 .setButtonText("开始")
                 .onClick(async () => {

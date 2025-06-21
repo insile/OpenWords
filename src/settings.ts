@@ -148,6 +148,34 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                     }
             }));
         new Setting(containerEl)
+            .setName("随机调度概率")
+            .setDesc("设置每次抽卡时随机调度的概率，其余为优先调度概率")
+            .addDropdown(dropdown => {
+                for (let i = 0; i <= 10; i++) {
+                    const value = (i / 10).toFixed(1);
+                    dropdown.addOption(value, value);
+                }
+                dropdown.setValue(this.plugin.settings.randomRatio.toFixed(1));
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.randomRatio = Number(value);
+                    await this.plugin.saveSettings();
+                });
+            });
+        new Setting(containerEl)
+            .setName("最大双链因子")
+            .setDesc("易记因子小于等于该值的单词可添加双链")
+            .addDropdown(dropdown => {
+                for (let i = 0; i < 10; i++) {
+                    const value = (1.2 + i * 0.2).toFixed(1);
+                    dropdown.addOption(value, value);
+                }
+                dropdown.setValue(this.plugin.settings.maxEfactorForLink.toFixed(1));
+                dropdown.onChange(async (value) => {
+                    this.plugin.settings.maxEfactorForLink = Number(value);
+                    await this.plugin.saveSettings();
+                });
+            });
+        new Setting(containerEl)
             .setName('重置单词属性')
             .setDesc('重置作用域单词的易记因子、重复次数、间隔和到期日')
             .addButton(button => button

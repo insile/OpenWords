@@ -36,6 +36,7 @@ If your plugin does not need CSS, delete this file.
     width: 500px; /* 固定宽度 */
     height: 300px; /* 固定高度 */
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     border: 1px solid var(--color-border);
@@ -50,9 +51,17 @@ If your plugin does not need CSS, delete this file.
 }
 
 .openwords-card-content { /* 单词内容样式 */
-    font-size: 2.5em; /* 设置单词字体大小 */
+    font-size: 3em; /* 设置单词字体大小 */
     font-weight: bold; /* 设置单词加粗 */
     color: var(--text-normal); /* 设置单词颜色 */
+    margin-top: 24px;
+}
+
+.openwords-card-meta {
+    font-size: 0.85em;
+    line-height: 1.5;
+    margin-top: 24px;
+
 }
 
 .openwords-card-markdown { /* Markdown 内容样式 */

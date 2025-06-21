@@ -1,4 +1,4 @@
-import { App, Modal, MarkdownRenderer, TFile, Component } from 'obsidian';
+import { App, Modal, MarkdownRenderer, TFile, Component, Notice } from 'obsidian';
 import { CardInfo } from '../card';
 import OpenWords from '../main';
 
@@ -8,6 +8,8 @@ export class SpellingModal extends Modal {
     plugin: OpenWords;
     component: Component;
     currentCard: CardInfo | null = null;
+    hasPeeked: boolean = false; // 是否看过答案
+    errorCount: number = 0;     // 本轮错误次数
 
     constructor(app: App, plugin: OpenWords) {
         super(app);
@@ -16,6 +18,7 @@ export class SpellingModal extends Modal {
     }
 
     async onOpen() {
+		// 加载组件
         const { contentEl } = this;
         contentEl.empty();
         this.component.load()
@@ -34,6 +37,7 @@ export class SpellingModal extends Modal {
                 event.preventDefault(); // 阻止页面滚动
                 if (this.currentCard) {
                     title.setText(`${this.currentCard.front}`); // 显示答案
+                    this.hasPeeked = true; // 标记已看答案
                 }
             }
         };
@@ -53,14 +57,19 @@ export class SpellingModal extends Modal {
         inputContainer: HTMLElement,
         feedbackContainer: HTMLElement
     ) {
-        const cards = Array.from(this.plugin.enabledCards.values());
+        const cards = Array.from(this.plugin.dueCards.values());
         if (cards.length === 0) {
             feedbackContainer.setText('没有更多单词了！');
             return;
         }
+        this.hasPeeked = false;
+        this.errorCount = 0;
 
-        // 随机选择一个单词
-        this.currentCard = cards[Math.floor(Math.random() * cards.length)];
+		// 从易记因子最低的50%中随机选择一个单词
+		const sorted = cards.slice().sort((a, b) => a.efactor - b.efactor);
+		const half = Math.ceil(sorted.length / 2);
+		const pool = sorted.slice(0, half);
+		this.currentCard = pool[Math.floor(Math.random() * pool.length)];
 
         // 渲染单词的词义
         const file = this.plugin.app.vault.getFileByPath(this.currentCard.path);
@@ -118,7 +127,7 @@ export class SpellingModal extends Modal {
         }
     }
 
-    checkSpelling(
+    async checkSpelling(
         inputFields: HTMLInputElement[],
         word: string,
         feedbackContainer: HTMLElement,
@@ -129,11 +138,35 @@ export class SpellingModal extends Modal {
         if (userInput.length === word.length) {
             if (userInput.toLowerCase() === word.toLowerCase()) {
                 feedbackContainer.setText('正确！');
+                if (this.currentCard) {
+                    let efactor = this.currentCard.efactor;
+                    if (this.hasPeeked) {
+                        efactor -= 0.02;
+                    } else if (this.errorCount === 0) {
+                        efactor += 0.15;
+                    } else {
+                        efactor += 0.05;
+                    }
+                    if (efactor < 1.3) efactor = 1.3;
+                    this.currentCard.efactor = efactor;
+
+                    // 同步到 frontmatter
+                    const file = this.plugin.app.vault.getFileByPath(this.currentCard.path);
+                    if (file instanceof TFile) {
+                        await this.plugin.app.fileManager.processFrontMatter(file, (frontMatter) => {
+                            frontMatter["易记因子"] = Math.round(efactor * 100);
+                        });
+                    }
+
+                    new Notice(`${this.currentCard.front} \n易记因子: ${efactor.toFixed(2)} \n重复次数: ${this.currentCard.repetition} \n间隔: ${this.currentCard.interval} \n到期日: ${this.currentCard.dueDate}`);
+
+                }
                 setTimeout(async () => {
                     await this.pickNextCard(wordMeaningContainer, inputContainer, feedbackContainer);
                 }, 500);
             } else {
                 feedbackContainer.setText('错误，请重试！');
+                this.errorCount += 1;
                 inputFields.forEach((field) => (field.value = '')); // 清空所有输入框
                 inputFields[0].focus(); // 聚焦第一个输入框
             }

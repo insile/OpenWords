@@ -18,6 +18,8 @@ interface OpenWordsSettings {
     enableWords6: boolean;
     enableWords7: boolean;
     enableWords8: boolean;
+	randomRatio: number;
+    maxEfactorForLink: number;
 }
 
 // 默认设置
@@ -32,6 +34,8 @@ const DEFAULT_SETTINGS: OpenWordsSettings = {
     enableWords6: false,
     enableWords7: false,
     enableWords8: false,
+	randomRatio: 0.7,
+    maxEfactorForLink: 2.6,
 }
 
 
@@ -257,13 +261,9 @@ export default class OpenWords extends Plugin {
     // 建立单词双链
     async addDoubleBrackets() {
         const unmasteredWords = new Set(Array.from(this.enabledCards.values())
-            .filter(card => card.efactor <= 2.5)
+            .filter(card => card.efactor <= this.settings.maxEfactorForLink) // 只选择易记因子小于等于设置值的单词
             .map(card => card.front)
         );
-        if (unmasteredWords.size === 0) {
-            new Notice("没有单词需要添加双链！");
-            return;
-        }
 
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (activeView) {
