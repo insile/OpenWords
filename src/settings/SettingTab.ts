@@ -1,6 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting, normalizePath } from 'obsidian';
-import { FolderSuggest } from './inputsuggest';
-import OpenWords from './main';
+import { FolderSuggest } from '../utils/InputSuggest';
+import OpenWords from '../main';
+
 
 // 插件设置选项卡
 export class OpenWordsSettingTab extends PluginSettingTab {
@@ -117,7 +118,8 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                         this.plugin.settings = {...this.plugin.settingsSnapshot}; // 更新插件设置
                         await this.plugin.saveSettings(); // 保存设置
                         await this.plugin.scanAllNotes(); // 重新缓存单词
-
+                        new Notice(`扫描完成！共 ${this.plugin.allCards.size} 个单词`); // 完成后更新消息
+                        this.plugin.updateStatusBar(); // 更新状态栏
                     } catch (error) {
                         console.error('缓存过程中发生错误:', error);
                         new Notice('缓存失败，请检查控制台日志！');

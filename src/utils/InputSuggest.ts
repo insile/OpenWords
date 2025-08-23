@@ -1,6 +1,7 @@
 import { App, TAbstractFile, TFolder, AbstractInputSuggest } from 'obsidian';
 
 
+// 输入建议类, 用于文件夹路径的自动补全
 export class FolderSuggest extends AbstractInputSuggest<string> {
     inputEl: HTMLInputElement;
     constructor(app: App, inputEl: HTMLInputElement) {

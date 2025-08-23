@@ -1,49 +1,16 @@
-import { MarkdownView, Notice, Plugin, TFile, normalizePath } from 'obsidian';
+import {MarkdownView, Notice, Plugin, TFile, TFolder, Vault} from 'obsidian';
+import { OpenWordsSettings, DEFAULT_SETTINGS } from "./settings/SettingData";
+import { OpenWordsSettingTab } from './settings/SettingTab';
+import { MainView, MAIN_VIEW, PageType } from './views/MainView';
+import { CardInfo } from './utils/Card';
 import { supermemo, SuperMemoGrade } from 'supermemo';
-import { OpenWordsSettingTab } from './settings';
-import { LearningTypeModal } from './modals/LearningTypeModal';
-import { CardInfo } from './card';
 import posTagger from 'wink-pos-tagger';
-
-
-// 插件设置
-interface OpenWordsSettings {
-    folderPath: string; // 用户指定的单词文件夹路径
-    indexPath: string; // 用户指定的索引文件夹路径
-    enableWords1: boolean;
-    enableWords2: boolean;
-    enableWords3: boolean;
-    enableWords4: boolean;
-    enableWords5: boolean;
-    enableWords6: boolean;
-    enableWords7: boolean;
-    enableWords8: boolean;
-	randomRatio: number;
-    maxEfactorForLink: number;
-}
-
-// 默认设置
-const DEFAULT_SETTINGS: OpenWordsSettings = {
-    folderPath: normalizePath(""),
-    indexPath: normalizePath("索引"),
-    enableWords1: false,
-    enableWords2: false,
-    enableWords3: false,
-    enableWords4: false,
-    enableWords5: false,
-    enableWords6: false,
-    enableWords7: false,
-    enableWords8: false,
-	randomRatio: 0.7,
-    maxEfactorForLink: 2.6,
-}
 
 
 // 插件主类
 export default class OpenWords extends Plugin {
     settings: OpenWordsSettings;  // 插件设置
     settingsSnapshot: OpenWordsSettings;  // 插件设置快照
-    statusBarItem: HTMLElement;  // 状态栏元素
 	tagger: posTagger = new posTagger();  // 词性标注器实例
     allCards: Map<string, CardInfo> = new Map(); // 所有单词
     masterCards: Map<string, CardInfo> = new Map(); // 掌握单词
@@ -53,22 +20,24 @@ export default class OpenWords extends Plugin {
 
     // 插件加载时执行的操作
     async onload() {
-        // 加载插件设置参数, 状态栏, 设置选项卡, 左侧工具栏按钮
+        // 加载插件设置参数, 设置选项卡, 左侧工具栏按钮, 注册主视图
         await this.loadSettings();
-        this.statusBarItem = this.addStatusBarItem();
         this.addSettingTab(new OpenWordsSettingTab(this.app, this));
-        this.addRibbonIcon('slack', 'OpenWords', async () => {
-            new LearningTypeModal(this.app, this).open();
-        });
+        this.addRibbonIcon('slack', 'OpenWords', async () => { await this.activateView(); });
+        this.registerView(MAIN_VIEW, (leaf) => new MainView(leaf, this));
 
         // 等待布局完成
         this.app.workspace.onLayoutReady(async () => {
-            // 学习模式命令
+			const normalized = this.settings.folderPath.endsWith("/")
+				? this.settings.folderPath
+				: this.settings.folderPath + "/";
+
+            // 激活视图命令
             this.addCommand({
                 id: 'LearningTypeModal',
-                name: '学习模式',
+                name: '学习视图',
                 callback: () => {
-                    new LearningTypeModal(this.app, this).open();
+                    this.activateView();
                 }
             });
             // 添加双链命令
@@ -81,13 +50,13 @@ export default class OpenWords extends Plugin {
             });
             // 监听单词文件创建事件
             this.registerEvent(this.app.vault.on("create", (file: TFile) => {
-                if (file.path.endsWith(".md") && file.path.startsWith(this.settings.folderPath)) {
+                if (file.path.endsWith(".md") && file.path.startsWith(normalized)) {
                     this.loadWordMetadata(file);
                 }
             }));
             // 监听单词文件删除事件
             this.registerEvent(this.app.vault.on("delete", (file: TFile) => {
-                if (file.path.endsWith(".md") && file.path.startsWith(this.settings.folderPath)) {
+                if (file.path.endsWith(".md") && file.path.startsWith(normalized)) {
                     this.allCards.delete(file.basename);
                     this.masterCards.delete(file.basename);
                     this.enabledCards.delete(file.basename);
@@ -98,17 +67,31 @@ export default class OpenWords extends Plugin {
             }));
             // 监听单词文件缓存修改事件
             this.registerEvent(this.app.metadataCache.on("changed", (file) => {
-                if (file.path.endsWith(".md") && file.path.startsWith(this.settings.folderPath)) {
+                if (file.path.endsWith(".md") && file.path.startsWith(normalized)) {
                     this.loadWordMetadata(file);
                 }
             }));
-            // 扫描所有单词文件
+            // 扫描所有单词文件, 更新状态栏
             await this.scanAllNotes();
+            this.updateStatusBar();
         });
     }
 
+    // 激活视图
+    async activateView() {
+        const leaves = this.app.workspace.getLeavesOfType(MAIN_VIEW);
+        if (leaves.length === 0) {
+            await this.app.workspace.getLeaf(true).setViewState({
+                type: MAIN_VIEW,
+                active: true,
+            });
+        } else {
+            await this.app.workspace.revealLeaf(leaves[0]);
+        }
+    }
+
     // 加载单词元数据
-    async loadWordMetadata(file: TFile) {
+    async loadWordMetadata(file: TFile, single = true) {
         const allCards = this.allCards;
 		const masterCards = this.masterCards;
         const enabledCards = this.enabledCards;
@@ -127,8 +110,10 @@ export default class OpenWords extends Plugin {
 
         // 如果文件没有 FrontMatter，直接返回
         if (!frontMatter) {
+            allCards.delete(file.basename);
+            if (single) { this.updateStatusBar(); }
             return;
-        }
+		}
 
         const tags: string[] = frontMatter.tags || [];
         const isMastered = frontMatter["掌握"] === true;
@@ -151,7 +136,21 @@ export default class OpenWords extends Plugin {
             repetition: frontMatter["重复次数"],
             isMastered: isMastered,
         };
-
+        if (
+            !card.front ||
+            !card.path ||
+            card.dueDate === undefined ||
+            card.interval === undefined ||
+            card.efactor === undefined ||
+            card.repetition === undefined ||
+            Number.isNaN(card.efactor) ||
+            Number.isNaN(card.interval) ||
+            Number.isNaN(card.repetition)
+        ) {
+            allCards.delete(file.basename);
+            if (single) { this.updateStatusBar(); }
+            return;
+        }
         const isMasteredOld = allCards.get(card.front)?.isMastered;
 
 		// 更新所有单词
@@ -179,7 +178,8 @@ export default class OpenWords extends Plugin {
             await this.syncMetadataToCheckbox(file, newCheckbox, oldCheckbox);
         }
 
-		this.updateStatusBar()
+        // 如果是单个文件更新状态栏
+        if (single) { this.updateStatusBar(); }
     }
 
     // 扫描所有单词文件
@@ -189,9 +189,11 @@ export default class OpenWords extends Plugin {
         this.enabledCards.clear();
         this.newCards.clear();
         this.dueCards.clear();
-
+		const normalized = this.settings.folderPath.endsWith("/")
+			? this.settings.folderPath
+			: this.settings.folderPath + "/";
         const files = this.app.vault.getMarkdownFiles();
-        const filteredFiles = files.filter(file => file.path.startsWith(this.settings.folderPath));
+        const filteredFiles = files.filter(file => file.path.startsWith(normalized));
 
         if (filteredFiles.length === 0) {
             new Notice('指定的文件夹下没有 Markdown 文件！');
@@ -200,14 +202,22 @@ export default class OpenWords extends Plugin {
         }
 
         await Promise.all(filteredFiles.map(async (file) => {
-            await this.loadWordMetadata(file);
+            await this.loadWordMetadata(file, false);
         }));
 
-        new Notice(`扫描完成！共 ${this.allCards.size} 个单词`); // 完成后更新消息
+        // new Notice(`扫描完成！共 ${this.allCards.size} 个单词`); // 完成后更新消息
     }
 
     // 更新单词属性
-    async updateCard(card: CardInfo, grade: SuperMemoGrade) {
+    async updateCard(card: CardInfo, grade: SuperMemoGrade, mode: PageType) {
+        if (
+            (mode === 'new' && !this.newCards.has(card.front)) ||
+            (mode === 'old' && !this.dueCards.has(card.front))
+        ) {
+            new Notice("当前单词不属于本模式范围, 评分无效并跳过");
+            return;
+        }
+
         const result = supermemo(card, grade);
         const newDate = window.moment().add(result.interval, 'day').format('YYYY-MM-DD');
         const file = this.app.vault.getFileByPath(card.path);
@@ -216,7 +226,6 @@ export default class OpenWords extends Plugin {
             new Notice(`文件 ${card.path} 不存在！`);
             return;
         }
-
 
         await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
             frontMatter["到期日"] = newDate;
@@ -325,11 +334,15 @@ export default class OpenWords extends Plugin {
             wordRecords[level] = {};
         }
 
-        const files = this.app.vault.getMarkdownFiles().filter(file => file.path.startsWith(wordsDir));
-        for (const file of files) {
-            const frontMatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-            if (!frontMatter) continue; // 如果没有 FrontMatter，跳过
-            const tags: string[] = frontMatter.tags || [];
+		const folder = this.app.vault.getAbstractFileByPath(wordsDir);
+		if (!(folder instanceof TFolder)) return; // 确认目录存在
+
+		Vault.recurseChildren(folder, (file) => {
+			if (!(file instanceof TFile) || file.extension !== "md") return;
+
+			const frontMatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+			if (!frontMatter) return; // 如果没有 FrontMatter，跳过
+			const tags: string[] = frontMatter.tags || [];
             const isMastered = frontMatter["掌握"] === true;
             for (const level of levels) {
                 if (tags.includes(level)) {
@@ -344,7 +357,7 @@ export default class OpenWords extends Plugin {
                     }
                 }
             }
-        }
+		})
 
         const totalWordsList: Record<string, number> = {}; // 记录每个级别的总单词数
         // 遍历级别，生成索引
@@ -509,9 +522,15 @@ export default class OpenWords extends Plugin {
         }
     }
 
+    // 更新状态栏
     updateStatusBar(){
-		this.statusBarItem.setText(`${this.newCards.size} + ${this.dueCards.size} + ${this.allCards.size-this.enabledCards.size} = ${this.allCards.size}`);
-	}
+        this.app.workspace.getLeavesOfType(MAIN_VIEW).forEach(leaf => {
+            const view = leaf.view;
+            if (view instanceof MainView) {
+                void view.updateStatusBar();
+            }
+        });
+    }
 
 	onunload() {
 
