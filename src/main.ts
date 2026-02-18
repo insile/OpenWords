@@ -80,13 +80,17 @@ export default class OpenWords extends Plugin {
     // 激活视图
     async activateView() {
         const leaves = this.app.workspace.getLeavesOfType(MAIN_VIEW);
+
         if (leaves.length === 0) {
             await this.app.workspace.getLeaf(true).setViewState({
                 type: MAIN_VIEW,
                 active: true,
             });
         } else {
-            await this.app.workspace.revealLeaf(leaves[0]);
+            const leaf = leaves[0];
+            if (leaf) {
+                await this.app.workspace.revealLeaf(leaf);
+            }
         }
     }
 
@@ -286,7 +290,7 @@ export default class OpenWords extends Plugin {
                     const innerWord = doubleBracketMatch[1]; // 获取双链中的名称
                     const alias = doubleBracketMatch[3]; // 获取双链中的别名
                     // 如果双链中的名称不在单词表中，去除双链，保留别名或名称
-                    if (!unmasteredWords.has(innerWord)) {
+                    if (innerWord && !unmasteredWords.has(innerWord)) {
                         return alias; // 如果有别名，保留别名；否则保留名称
                     }
                     // 如果双链中的名称在单词表中，保持原样

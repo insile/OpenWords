@@ -51,7 +51,7 @@ export class MainView extends ItemView {
 
     async onOpen() {
         this.component.load();
-        const container = this.containerEl.children[1];
+        const container = this.containerEl.querySelector('.view-content') as HTMLElement;
         this.viewContainer = container.createDiv({ cls: 'openwords-view-container' });
         this.statusBarEl = container.createDiv({ cls: 'openwords-view-statusbar' });
         await this.render();

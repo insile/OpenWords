@@ -59,7 +59,7 @@ export function pickNextSCard(this: MainView) {
     const sorted = cards.slice().sort((a, b) => a.efactor - b.efactor);
     const half = Math.ceil(sorted.length / 2);
     const pool = sorted.slice(0, half);
-    return pool[Math.floor(Math.random() * pool.length)];
+    return pool[Math.floor(Math.random() * pool.length)] ?? null;
 }
 
 export async function renderInput(
@@ -106,19 +106,19 @@ export async function renderInput(
 
             inputField.addEventListener('input', () => {
                 if (inputField.value.length === 1 && i < word.length - 1) {
-                    inputFields[i + 1].focus();
+                    inputFields[i + 1]?.focus();
                 }
                 this.checkSpelling(inputFields, word, feedbackContainer, wordMeaningContainer, inputContainer);
             });
 
             inputField.addEventListener('keydown', (event) => {
                 if (event.key === 'Backspace' && inputField.value === '' && i > 0) {
-                    inputFields[i - 1].focus();
+                    inputFields[i - 1]?.focus();
                 }
             });
         }
 
-        inputFields[0].focus();
+        inputFields[0]?.focus();
     }
 }
 
@@ -176,7 +176,7 @@ export async function checkSpelling(
             feedbackContainer.setText('错误，请重试！');
             this.errorCount += 1;
             inputFields.forEach((field) => (field.value = ''));
-            inputFields[0].focus();
+            inputFields[0]?.focus();
         }
     }
 }

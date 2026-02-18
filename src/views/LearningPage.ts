@@ -69,11 +69,11 @@ export function pickNextLCard(this: MainView) {
     }
     const randomMode = Math.random() < this.plugin.settings.randomRatio;
     if (randomMode) {
-        return pool[Math.floor(Math.random() * pool.length)];
+        return pool[Math.floor(Math.random() * pool.length)] ?? null;
     } else {
         const topN = Math.max(1, Math.ceil(pool.length / 100));
         const topPool = pool.slice(0, topN);
-        return topPool[Math.floor(Math.random() * topPool.length)];
+        return topPool[Math.floor(Math.random() * topPool.length)] ?? null;
     }
 }
 
@@ -105,7 +105,7 @@ export function renderCard(this: MainView, cardContainer: HTMLDivElement) {
 }
 
 // 评分按钮渲染
-export function renderSettings(cardContainer: HTMLDivElement, settingsContainer: HTMLElement) {
+export function renderSettings(this: MainView, cardContainer: HTMLDivElement, settingsContainer: HTMLElement) {
     const grades: { grade: SuperMemoGrade, label: string }[] = [
         { grade: 0, label: '评分 1: 回答错误, 完全不会' },
         { grade: 1, label: '评分 2: 回答错误, 看到正确答案后感觉很熟悉' },
