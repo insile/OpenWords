@@ -3,10 +3,12 @@
 	"version": "1.0.7",
 	"description": "用于英语学习中背单词与单词管理的插件",
 	"main": "main.js",
+	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"version": "node version-bump.mjs && git add manifest.json versions.json"
+		"version": "node version-bump.mjs && git add manifest.json versions.json",
+		"lint": "eslint ."
 	},
 	"keywords": [
 		"Obsidian",
@@ -18,17 +20,18 @@
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^16.11.6",
-		"@types/wink-pos-tagger": "^2.2.6",
-		"@typescript-eslint/eslint-plugin": "5.29.0",
-		"@typescript-eslint/parser": "5.29.0",
-		"builtin-modules": "3.3.0",
-		"esbuild": "^0.25.4",
-		"obsidian": "latest",
+		"esbuild": "0.25.5",
+		"eslint-plugin-obsidianmd": "0.1.9",
+		"globals": "14.0.0",
 		"tslib": "2.4.0",
-		"typescript": "4.7.4"
+		"typescript": "^5.8.3",
+		"typescript-eslint": "8.35.1",
+		"@eslint/js": "9.30.1",
+		"jiti": "2.6.1",
+		"@types/wink-pos-tagger": "^2.2.6"
 	},
 	"dependencies": {
-		"dayjs": "^1.11.13",
+		"obsidian": "latest",
 		"supermemo": "^2.0.23",
 		"wink-pos-tagger": "^2.2.2"
 	}
