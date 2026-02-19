@@ -84,9 +84,36 @@ export class MainView extends ItemView {
 
     async updateStatusBar() {
         if (!this.statusBarEl) return;
-        this.statusBarEl.setText(
-            `${this.plugin.newCards.size} + ${Array.from(this.plugin.dueCards.values())
-            .filter(card => window.moment(card.dueDate).isBefore(window.moment())).length} / ${this.plugin.dueCards.size} + ${this.plugin.allCards.size - this.plugin.enabledCards.size} = ${this.plugin.allCards.size}`
-        );
+        
+        // 计算各分类的单词数
+        const newCount = this.plugin.newCards.size;
+        const dueTodayCount = Array.from(this.plugin.dueCards.values())
+            .filter(card => window.moment(card.dueDate).isBefore(window.moment())).length;
+        const reviewCount = this.plugin.dueCards.size - dueTodayCount;
+        const masteredCount = this.plugin.masterCards.size;
+        const disabledCount = this.plugin.allCards.size - this.plugin.enabledCards.size;
+        const totalCount = this.plugin.allCards.size;
+        
+        // 清空状态栏
+        this.statusBarEl.empty();
+        
+        // 创建第一行：新单词、待复习、今日到期、已掌握、未启用
+        const row1 = this.statusBarEl.createDiv({ cls: 'openwords-statusbar-row' });
+        
+        this.createStatItem(row1, '新单词', newCount);
+        this.createStatItem(row1, '待复习', reviewCount);
+        this.createStatItem(row1, '今日到期', dueTodayCount);
+        this.createStatItem(row1, '已掌握', masteredCount);
+        this.createStatItem(row1, '未启用', disabledCount);
+        
+        // 创建第二行：总计
+        const row2 = this.statusBarEl.createDiv({ cls: 'openwords-statusbar-row openwords-statusbar-total' });
+        this.createStatItem(row2, '总计', totalCount, true);
+    }
+    
+    private createStatItem(container: HTMLElement, label: string, count: number, isTotal: boolean = false) {
+        const item = container.createDiv({ cls: isTotal ? 'openwords-stat-item total' : 'openwords-stat-item' });
+        item.createSpan({ cls: 'openwords-stat-label', text: label });
+        item.createSpan({ cls: 'openwords-stat-count', text: count.toString() });
     }
 }

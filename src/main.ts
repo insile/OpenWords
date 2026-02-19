@@ -1,4 +1,4 @@
-import {MarkdownView, Notice, Plugin, TFile, TFolder, Vault} from 'obsidian';
+import {EventRef, MarkdownView, Notice, Plugin, TFile, TFolder, Vault} from 'obsidian';
 import { OpenWordsSettings, DEFAULT_SETTINGS } from "./settings/SettingData";
 import { OpenWordsSettingTab } from './settings/SettingTab';
 import { MainView, MAIN_VIEW, PageType } from './views/MainView';
@@ -17,6 +17,9 @@ export default class OpenWords extends Plugin {
     enabledCards: Map<string, CardInfo> = new Map(); // 启用单词
     newCards: Map<string, CardInfo> = new Map(); // 新单词
     dueCards: Map<string, CardInfo> = new Map(); // 旧单词
+    currentFolderPath: string = "";  // 当前监听的文件夹路径
+    fileWatcherRefs: EventRef[] = [];  // 存储文件监听器的 EventRef 以便注销
+
 
     // 插件加载时执行的操作
     async onload() {
@@ -28,10 +31,6 @@ export default class OpenWords extends Plugin {
 
         // 等待布局完成
         this.app.workspace.onLayoutReady(async () => {
-			const normalized = this.settings.folderPath.endsWith("/")
-				? this.settings.folderPath
-				: this.settings.folderPath + "/";
-
             // 激活视图命令
             this.addCommand({
                 id: 'LearningTypeModal',
@@ -48,29 +47,8 @@ export default class OpenWords extends Plugin {
                     this.addDoubleBrackets();
                 }
             });
-            // 监听单词文件创建事件
-            this.registerEvent(this.app.vault.on("create", (file: TFile) => {
-                if (file.path.endsWith(".md") && file.path.startsWith(normalized)) {
-                    this.loadWordMetadata(file);
-                }
-            }));
-            // 监听单词文件删除事件
-            this.registerEvent(this.app.vault.on("delete", (file: TFile) => {
-                if (file.path.endsWith(".md") && file.path.startsWith(normalized)) {
-                    this.allCards.delete(file.basename);
-                    this.masterCards.delete(file.basename);
-                    this.enabledCards.delete(file.basename);
-                    this.newCards.delete(file.basename);
-                    this.dueCards.delete(file.basename);
-				this.updateStatusBar()
-                }
-            }));
-            // 监听单词文件缓存修改事件
-            this.registerEvent(this.app.metadataCache.on("changed", (file) => {
-                if (file.path.endsWith(".md") && file.path.startsWith(normalized)) {
-                    this.loadWordMetadata(file);
-                }
-            }));
+            // 注册文件监听器
+            this.registerFileWatchers();
             // 扫描所有单词文件, 更新状态栏
             await this.scanAllNotes();
             this.updateStatusBar();
@@ -121,15 +99,7 @@ export default class OpenWords extends Plugin {
 
         const tags: string[] = frontMatter.tags || [];
         const isMastered = frontMatter["掌握"] === true;
-        const isTagged =
-            (this.settings.enableWords1 && tags.includes('级别/小学')) ||
-            (this.settings.enableWords2 && tags.includes('级别/中考')) ||
-            (this.settings.enableWords3 && tags.includes('级别/高考四级')) ||
-            (this.settings.enableWords4 && tags.includes('级别/考研')) ||
-            (this.settings.enableWords5 && tags.includes('级别/六级')) ||
-            (this.settings.enableWords6 && tags.includes('级别/雅思')) ||
-            (this.settings.enableWords7 && tags.includes('级别/托福')) ||
-            (this.settings.enableWords8 && tags.includes('级别/GRE'));
+        const isTagged = tags.some(tag => this.settings.enabledTags.includes(tag));
 
         const card: CardInfo = {
             front: file.basename,
@@ -218,7 +188,7 @@ export default class OpenWords extends Plugin {
             (mode === 'new' && !this.newCards.has(card.front)) ||
             (mode === 'old' && !this.dueCards.has(card.front))
         ) {
-            new Notice("当前单词不属于本模式范围, 评分无效并跳过");
+            new Notice(`${card.front} 不属于本模式范围 \n评分无效并跳过`);
             return;
         }
 
@@ -240,7 +210,16 @@ export default class OpenWords extends Plugin {
 
 		new Notice(`${card.front} \n易记因子: ${result.efactor.toFixed(2)} \n重复次数: ${result.repetition} \n间隔: ${result.interval} \n到期日: ${newDate}`);
 
-		await new Promise(resolve => setTimeout(resolve, 200))
+        // 等待元数据缓存更新（最多等待 1 秒）
+        let attempts = 0;
+        while (attempts < 10) {
+            const updated = this.app.metadataCache.getFileCache(file);
+            if (updated?.frontmatter?.["易记因子"] === Math.round(result.efactor * 100)) {
+                break; // 缓存已更新
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+        }
     }
 
     // 重置单词属性
@@ -249,28 +228,57 @@ export default class OpenWords extends Plugin {
             new Notice("没有单词需要重置！");
             return;
         }
+        
+        // 注销监听器，避免重置过程中触发大量缓存更新事件
+        this.unregisterFileWatchers();
+        
         const notice = new Notice('重置中...', 0); // 创建一个持续显示的 Notice
         let count = 0; // 计数器
         const cardList = Array.from(this.enabledCards.values()); // 将 Map 转换为数组
-        for (const card of cardList) {
-            const file = this.app.vault.getFileByPath(card.path);
-            if (!file) {
-                new Notice(`文件 ${card.path} 不存在！`);
-                continue;
+        const total = cardList.length;
+        const concurrency = 10; // 并发处理数量
+        const todayDate = window.moment().format('YYYY-MM-DD'); // 提前计算日期，避免重复计算
+        let updateFrequency = Math.max(1, Math.floor(total / 50)); // 减少更新频率到 2%
+        
+        // 创建并发处理任务
+        const processTasks = async () => {
+            for (let i = 0; i < cardList.length; i += concurrency) {
+                const chunk = cardList.slice(i, i + concurrency);
+                await Promise.all(chunk.map(async (card) => {
+                    const file = this.app.vault.getFileByPath(card.path);
+                    if (file) {
+                        await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
+                            frontMatter["到期日"] = todayDate;
+                            frontMatter["间隔"] = 0;
+                            frontMatter["易记因子"] = 250;
+                            frontMatter["重复次数"] = 0;
+                        });
+                    }
+                    count++;
+                    // 定期更新 Notice，减少 UI 更新频率
+                    if (count % updateFrequency === 0 || count === total) {
+                        notice.setMessage(`重置中... ${count}/${total}`);
+                    }
+                }));
             }
-            await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
-                frontMatter["到期日"] = window.moment().format('YYYY-MM-DD');
-                frontMatter["间隔"] = 0;
-                frontMatter["易记因子"] = 250;
-                frontMatter["重复次数"] = 0;
-            });
-            count++; // 增加计数器
-            notice.setMessage(`重置中... ${count}/${this.enabledCards.size}`); // 更新 Notice 的消息
-        }
-        notice.setMessage(`重置完成！共 ${count} 个单词`); // 完成后更新消息
-        setTimeout(() => notice.hide(), 2000); // 2 秒后自动隐藏 Notice
-    }
+        };
 
+        try {
+            await processTasks();
+            notice.setMessage(`重置完成！共 ${count} 个单词`);
+        } catch (error) {
+            new Notice(`重置出错: ${error}`);
+            console.error('Reset card error:', error);
+        } finally {
+            // 重新注册监听器
+            this.registerFileWatchers();
+            // 重新扫描所有单词文件，确保数据同步
+            await this.scanAllNotes();
+            this.updateStatusBar();
+            setTimeout(() => notice.hide(), 2000); // 2 秒后自动隐藏 Notice
+        }
+    }
+    
     // 建立单词双链
     async addDoubleBrackets() {
         const unmasteredWords = new Set(Array.from(this.enabledCards.values())
@@ -536,8 +544,63 @@ export default class OpenWords extends Plugin {
         });
     }
 
-	onunload() {
+    // 注册文件监听器
+    private registerFileWatchers() {
+        // 先清理旧的监听器
+        this.unregisterFileWatchers();
 
+        // 更新当前监听的文件夹路径
+        this.currentFolderPath = this.settings.folderPath.endsWith("/")
+            ? this.settings.folderPath
+            : this.settings.folderPath + "/";
+
+        // 监听单词文件创建事件
+        const createRef = this.app.vault.on("create", (file: TFile) => {
+            if (file.path.endsWith(".md") && file.path.startsWith(this.currentFolderPath)) {
+                this.loadWordMetadata(file);
+            }
+        });
+        this.fileWatcherRefs.push(createRef);
+
+        // 监听单词文件删除事件
+        const deleteRef = this.app.vault.on("delete", (file: TFile) => {
+            if (file.path.endsWith(".md") && file.path.startsWith(this.currentFolderPath)) {
+                this.allCards.delete(file.basename);
+                this.masterCards.delete(file.basename);
+                this.enabledCards.delete(file.basename);
+                this.newCards.delete(file.basename);
+                this.dueCards.delete(file.basename);
+                this.updateStatusBar()
+            }
+        });
+        this.fileWatcherRefs.push(deleteRef);
+
+        // 监听单词文件缓存修改事件
+        const changedRef = this.app.metadataCache.on("changed", (file) => {
+            if (file.path.endsWith(".md") && file.path.startsWith(this.currentFolderPath)) {
+                this.loadWordMetadata(file);
+            }
+        });
+        this.fileWatcherRefs.push(changedRef);
+    }
+
+    // 注销文件监听器
+    private unregisterFileWatchers() {
+        this.fileWatcherRefs.forEach(ref => {
+            this.app.vault.offref(ref);
+            this.app.metadataCache.offref(ref);
+        });
+        this.fileWatcherRefs = [];
+    }
+
+    // 重新初始化文件监听器（供设置改变时调用）
+    async reinitializeFileWatchers() {
+        this.registerFileWatchers();
+    }
+
+	onunload() {
+        // 清理文件监听器
+        this.unregisterFileWatchers();
     }
 
     async loadSettings() {

@@ -8,18 +8,6 @@ If your plugin does not need CSS, delete this file.
 */
 
 
-/* 插件设置选项卡 */
-.openwords-toggle-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr); /* 每行 4 列 */
-    gap: 10px; /* 每个 toggle 之间的间距 */
-    /* margin-top: 10px; */
-}
-.openwords-toggle-grid .setting-item:first-child {
-    padding-top: 10px;
-    border-top: 1px solid var(--background-modifier-border)
-}
-
 /* 返回按钮 */
 .openwords-back-btn {
     display: block;
@@ -29,13 +17,130 @@ If your plugin does not need CSS, delete this file.
     font-size: 1.05em;
 }
 
+/* 状态栏 */
 .openwords-view-statusbar {
-    display: block;
-    text-align: center;
-    margin: 32px auto 0 auto;
-    font-size: 1.1em;
-    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin: 20px auto 0 auto;
+    padding: 20px;
+    width: 70%;
+    max-width: 700px;
+    box-sizing: border-box;
+    background: linear-gradient(135deg, var(--background-secondary) 0%, var(--background-primary) 100%);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.openwords-statusbar-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
     width: 100%;
+    flex-wrap: wrap;
+}
+
+.openwords-statusbar-total {
+    justify-content: center;
+    padding-top: 20px;
+    border-top: 2px solid var(--divider-color);
+}
+
+.openwords-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    padding: 2px 2px;
+    background-color: var(--background-primary);
+    border-radius: 8px;
+    border: 1px solid var(--divider-color);
+    transition: all 0.3s ease;
+}
+
+.openwords-stat-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-color: var(--text-accent);
+}
+
+.openwords-stat-item.total {
+    padding: 2px 2px;
+    background: none;
+    border: 1px solid var(--divider-color);
+    color: var(--text-normal);
+}
+
+.openwords-stat-item.total:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+.openwords-stat-label {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.openwords-stat-item.total .openwords-stat-label {
+    font-size: 0.8em;
+    letter-spacing: 0.5px;
+}
+
+.openwords-stat-count {
+    font-size: 1.4em;
+    font-weight: 700;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.openwords-stat-item:nth-child(1) .openwords-stat-count {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.openwords-stat-item:nth-child(2) .openwords-stat-count {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.openwords-stat-item:nth-child(3) .openwords-stat-count {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.openwords-stat-item:nth-child(4) .openwords-stat-count {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.openwords-stat-item:nth-child(5) .openwords-stat-count {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.openwords-stat-item.total .openwords-stat-count {
+    font-size: 1.6em;
+    color: var(--text-normal);
+    background: none;
+    -webkit-text-fill-color: initial;
 }
 
 /* 学习模式页面 */
@@ -178,4 +283,74 @@ If your plugin does not need CSS, delete this file.
     text-align: center;
     font-size: 1em;
     color: var(--text-accent);
+}
+
+
+/* 插件设置标签管理 */
+.openwords-tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    background-color: var(--background-secondary);
+    border-radius: 5px;
+}
+
+.openwords-tag-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.openwords-tag-item button {
+    padding: 2px 6px;
+    border: none;
+    background-color: rgba(255, 255, 255, 0.3);
+    color: inherit;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background-color 0.2s;
+}
+
+.openwords-tag-item button:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+.openwords-empty-tags {
+    color: var(--text-muted);
+    font-size: 0.9em;
+    margin: 0;
+}
+
+/* 标签历史建议样式 */
+.openwords-tag-history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* padding: 4px 0; */
+}
+
+.openwords-tag-history-text {
+    flex: 1;
+    word-break: break-all;
+}
+
+.openwords-tag-history-delete {
+    padding: 2px 8px;
+    font-size: 12px;
+    margin-left: 8px;
+    border: none;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.openwords-tag-history-delete:hover {
+    background-color: rgba(255, 255, 255, 0.5);
 }
