@@ -169,6 +169,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                         await this.plugin.reinitializeFileWatchers();
                         await this.plugin.scanAllNotes();
                         new Notice(`扫描完成！共 ${this.plugin.allCards.size} 个单词`);
+                        await this.plugin.createWordStatusBaseFile();
                         this.plugin.updateStatusBar();
                     } catch (error) {
                         console.error('缓存过程中发生错误:', error);
@@ -181,7 +182,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('生成索引')
-            .setDesc('按级别生成所有单词的首字母索引文件')
+            .setDesc('按标签生成所有单词的首字母索引文件')
             .addButton(button => button
                 .setButtonText('索引')
                 .onClick(async () => {
@@ -252,6 +253,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                         await this.plugin.reinitializeFileWatchers();
                         await this.plugin.scanAllNotes();
                         new Notice(`扫描完成！共 ${this.plugin.allCards.size} 个单词`);
+                        await this.plugin.createWordStatusBaseFile();
                         this.plugin.updateStatusBar();
                     } catch (error) {
                         console.error('恢复默认设置失败:', error);

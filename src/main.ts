@@ -1,4 +1,4 @@
-import {EventRef, MarkdownView, Notice, Plugin, TFile, TFolder, Vault} from 'obsidian';
+import { EventRef, MarkdownView, Notice, Plugin, TFile, TFolder, Vault } from 'obsidian';
 import { OpenWordsSettings, DEFAULT_SETTINGS } from "./settings/SettingData";
 import { OpenWordsSettingTab } from './settings/SettingTab';
 import { MainView, MAIN_VIEW, PageType } from './views/MainView';
@@ -125,7 +125,6 @@ export default class OpenWords extends Plugin {
             if (single) { this.updateStatusBar(); }
             return;
         }
-        const isMasteredOld = allCards.get(card.front)?.isMastered;
 
 		// 更新所有单词
 		allCards.set(card.front, card);
@@ -143,13 +142,6 @@ export default class OpenWords extends Plugin {
             } else {
                 dueCards.set(card.front, card);
             }
-        }
-
-        // 如果掌握状态发生变化，更新复选框
-        if (isMastered !== isMasteredOld && isMasteredOld !== undefined) {
-            const newCheckbox = isMastered ? 'x' : ' ';
-            const oldCheckbox = isMasteredOld ? 'x' : ' ';
-            await this.syncMetadataToCheckbox(file, newCheckbox, oldCheckbox);
         }
 
         // 如果是单个文件更新状态栏
@@ -178,8 +170,6 @@ export default class OpenWords extends Plugin {
         await Promise.all(filteredFiles.map(async (file) => {
             await this.loadWordMetadata(file, false);
         }));
-
-        // new Notice(`扫描完成！共 ${this.allCards.size} 个单词`); // 完成后更新消息
     }
 
     // 更新单词属性
@@ -188,7 +178,7 @@ export default class OpenWords extends Plugin {
             (mode === 'new' && !this.newCards.has(card.front)) ||
             (mode === 'old' && !this.dueCards.has(card.front))
         ) {
-            new Notice(`${card.front} 不属于本模式范围 \n评分无效并跳过`);
+            new Notice(`${card.front} \n不属于本模式范围 \n评分无效并跳过`);
             return;
         }
 
@@ -212,12 +202,12 @@ export default class OpenWords extends Plugin {
 
         // 等待元数据缓存更新（最多等待 1 秒）
         let attempts = 0;
-        while (attempts < 10) {
+        while (attempts < 5) {
             const updated = this.app.metadataCache.getFileCache(file);
-            if (updated?.frontmatter?.["易记因子"] === Math.round(result.efactor * 100)) {
+            if (updated?.frontmatter?.["到期日"] === newDate) {
                 break; // 缓存已更新
             }
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 200));
             attempts++;
         }
     }
@@ -229,8 +219,8 @@ export default class OpenWords extends Plugin {
             return;
         }
         
-        // 注销监听器，避免重置过程中触发大量缓存更新事件
-        this.unregisterFileWatchers();
+        // // 注销监听器，避免重置过程中触发大量缓存更新事件
+        // this.unregisterFileWatchers();
         
         const notice = new Notice('重置中...', 0); // 创建一个持续显示的 Notice
         let count = 0; // 计数器
@@ -270,11 +260,11 @@ export default class OpenWords extends Plugin {
             new Notice(`重置出错: ${error}`);
             console.error('Reset card error:', error);
         } finally {
-            // 重新注册监听器
-            this.registerFileWatchers();
-            // 重新扫描所有单词文件，确保数据同步
-            await this.scanAllNotes();
-            this.updateStatusBar();
+            // // 重新注册监听器
+            // this.registerFileWatchers();
+            // // 重新扫描所有单词文件，确保数据同步
+            // await this.scanAllNotes();
+            // this.updateStatusBar();
             setTimeout(() => notice.hide(), 2000); // 2 秒后自动隐藏 Notice
         }
     }
@@ -324,183 +314,163 @@ export default class OpenWords extends Plugin {
         }
     }
 
-    // 生成单词索引
+    // 生成单词索引 .base 文件
     async generateIndex() {
-        const notice = new Notice('索引中...', 0); // 创建一个持续显示的 Notice
-        const levels = [
-            "级别/小学", "级别/中考", "级别/高考四级", "级别/考研",
-            "级别/六级", "级别/雅思", "级别/托福", "级别/GRE"
-        ];
-        const wordsDir = this.settings.folderPath; // 单词文件夹路径
-        const indexDir = this.settings.indexPath; // 索引文件夹路径
+        const notice = new Notice('索引中...', 0);
+        
+        // 从设置读取标签并转换为配置对象（将多级标签的 '/' 替换为 '.'）
+        const levelConfigs = this.settings.enabledTags.map(tag => {
+            const name = tag.replace(/\//g, '.');
+            return { tag, name };
+        });
 
-        // 创建索引文件夹 (如果不存在)
+        const wordsDir = this.settings.folderPath;
+        const indexDir = this.settings.indexPath;
+
+        // 创建索引文件夹
         const existingIndexFolder = this.app.vault.getFolderByPath(indexDir);
         if (!existingIndexFolder) {
             await this.app.vault.createFolder(indexDir);
         }
 
-        // 遍历所有单词，记录每个单词的级别
-        const wordRecords: Record<string, { [letter: string]: string[] }> = {};
-        for (const level of levels) {
-            wordRecords[level] = {};
+        // 统计每个级别的单词数
+        const levelWordCounts: Record<string, number> = {};
+        for (const level of levelConfigs) {
+            levelWordCounts[level.tag] = 0;
         }
 
-		const folder = this.app.vault.getAbstractFileByPath(wordsDir);
-		if (!(folder instanceof TFolder)) return; // 确认目录存在
+        const folder = this.app.vault.getAbstractFileByPath(wordsDir);
+        if (!(folder instanceof TFolder) || wordsDir === "/") {
+            notice.setMessage('指定的单词文件夹不存在！');
+            setTimeout(() => notice.hide(), 2000);
+            return
+        };
 
-		Vault.recurseChildren(folder, (file) => {
-			if (!(file instanceof TFile) || file.extension !== "md") return;
+        Vault.recurseChildren(folder, (file) => {
+            if (!(file instanceof TFile) || file.extension !== "md") return;
 
-			const frontMatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-			if (!frontMatter) return; // 如果没有 FrontMatter，跳过
-			const tags: string[] = frontMatter.tags || [];
-            const isMastered = frontMatter["掌握"] === true;
-            for (const level of levels) {
-                if (tags.includes(level)) {
-                    const letter = file.basename[0].toUpperCase(); // 获取单词首字母
-                    if (!wordRecords[level][letter]) {
-                        wordRecords[level][letter] = [];
-                    }
-                    if (isMastered)
-                        wordRecords[level][letter].push(`- [x] [[${file.basename}]]`);
-                    else {
-                        wordRecords[level][letter].push(`- [ ] [[${file.basename}]]`);
-                    }
+            const frontMatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+            if (!frontMatter) return;
+
+            const tags: string[] = frontMatter.tags || [];
+            for (const level of levelConfigs) {
+                if (tags.includes(level.tag)) {
+                    levelWordCounts[level.tag]++;
                 }
             }
-		})
+        });
 
-        const totalWordsList: Record<string, number> = {}; // 记录每个级别的总单词数
-        // 遍历级别，生成索引
-        for (const level of levels) {
-            const levelName = level.split('/').pop(); // 获取级别名称
-            const levelFolderPath = `${indexDir}/${levelName}`;
-            const existingLevelFolder = this.app.vault.getFolderByPath(levelFolderPath);
-            notice.setMessage(`索引中... ${levelName}`); // 更新 Notice 的消息
+        // 总单词数
+        const totalCount = this.allCards.size;
 
-            // 如果级别文件夹不存在，则创建
-            if (!existingLevelFolder) {
-                await this.app.vault.createFolder(levelFolderPath);
-            }
+        // 生成主索引文件
+        const mainIndexPath = `${indexDir}/英语单词索引.md`;
+        notice.setMessage('索引中... 生成主索引');
 
-            let totalWords = 0; // 统计总单词数
-            const letterStats: { letter: string; count: number }[] = []; // 记录每个字母的单词数量
+        // 构建表格
+        const titleRow = '| [[英语单词索引.总计.base#总计\\|总计]] | ' + levelConfigs.map(l => `[[英语单词索引.${l.name}.base#${l.name.split('.').pop()}\\|${l.name.split('.').pop()}]]`).join(' | ') + ' |';
+        const separator = '| :---: | ' + levelConfigs.map(() => ':---:').join(' | ') + ' |';
+        const countRow = '| ' + totalCount + ' | ' + levelConfigs.map(l => levelWordCounts[l.tag] || 0).join(' | ') + ' |';
 
-            for (let i = 65; i <= 90; i++) {
-                const letter = String.fromCharCode(i);
-                const words = wordRecords[level][letter] || []; // 如果没有单词，返回空数组
-                words.sort((a, b) => {
-                    const extractName = (line: string) => {
-                        const match = line.match(/\[\[(.+?)\]\]/);
-                        return match ? match[1] : line;
-                    };
-                    return extractName(a).localeCompare(extractName(b));
-                }); // 按字母顺序排序
-                totalWords += words.length; // 累加总单词数
-                letterStats.push({ letter, count: words.length }); // 添加统计信息
-
-                // 创建或覆盖字母索引文件
-                const letterFilePath = `${levelFolderPath}/${levelName}.${letter}.md`;
-                const content = words.join('\n');
-                await this.writeFile(letterFilePath, `##### ${levelName}.${letter} ${words.length}\n${content}`); // 写入索引文件
-            }
-            totalWordsList[level] = totalWords; // 记录每个级别的总单词数
-
-            // 生成总索引文件
-            const totalIndexFilePath = `${levelFolderPath}/单词索引.${levelName}.md`;
-            const totalIndexContent = [
-                `##### 单词索引.${levelName} ${totalWords}`,
-                `|   首字母   | 数量 |`,
-                `| :-------: | --: |`,
-                ...letterStats.map(stat => `| [${stat.letter}](${levelName}.${stat.letter}) | ${stat.count} |`)
-            ].join('\n');
-
-            await this.writeFile(totalIndexFilePath, totalIndexContent); // 写入索引文件
-        }
-
-        // 生成全索引
-        const fullIndexFolderPath = `${indexDir}/全索引`;
-        notice.setMessage(`索引中... 全索引`); // 更新 Notice 的消息
-
-        const existingFullIndexFolder = this.app.vault.getFolderByPath(fullIndexFolderPath);
-        if (!existingFullIndexFolder) {
-            await this.app.vault.createFolder(fullIndexFolderPath);
-        }
-
-        // 先收集所有字母到一个新的对象
-        const allWordsByLetter: Record<string, string[]> = {}; // { A: [...], B: [...], ... }
-
-        for (const levelRecords of Object.values(wordRecords)) {
-            for (const [letter, words] of Object.entries(levelRecords)) {
-                if (!allWordsByLetter[letter]) {
-                    allWordsByLetter[letter] = [];
-                }
-                allWordsByLetter[letter].push(...words);
-            }
-        }
-
-        let totalWords = 0;
-        const letterStats: { letter: string; count: number }[] = [];
-
+        // 字母行
+        const letterRows: string[] = [];
         for (let i = 65; i <= 90; i++) {
             const letter = String.fromCharCode(i);
-            let words = allWordsByLetter[letter] || []; // 如果没有单词，返回空数组
-            words = Array.from(new Set(words)); // 去重
-            totalWords += words.length; // 累加总单词数
-            letterStats.push({ letter, count: words.length });
-            words.sort((a, b) => {
-                const extractName = (line: string) => {
-                    const match = line.match(/\[\[(.+?)\]\]/);
-                    return match ? match[1] : line;
-                };
-                return extractName(a).localeCompare(extractName(b));
-            });
-
-            // 创建或覆盖字母索引文件
-            const letterFilePath = `${fullIndexFolderPath}/全索引.${letter}.md`;
-            const content = words.join('\n');
-            await this.writeFile(letterFilePath, `##### 全索引.${letter} ${words.length}\n${content}`); // 写入索引文件
+            const cells = [`[[英语单词索引.总计.base#总计.${letter}\\|${letter}]]`];
+            for (const level of levelConfigs) {
+                cells.push(`[[英语单词索引.${level.name}.base#${level.name.split('.').pop()}.${letter}\\|${letter}]]`);
+            }
+            letterRows.push('| ' + cells.join(' | ') + ' |');
         }
 
-        // 生成总索引文件
-        const totalIndexFilePath = `${fullIndexFolderPath}/单词索引.全索引.md`;
-        const totalIndexContent = [
-            `##### 单词索引.全索引 ${totalWords}`,
-            `|   首字母   | 数量 |`,
-            `| :-------: | --: |`,
-            ...letterStats.map(stat => `| [${stat.letter}](全索引.${stat.letter}) | ${stat.count} |`)
+        // 合并表格
+        const mainContent = [
+            titleRow,
+            separator,
+            countRow,
+            ...letterRows
         ].join('\n');
 
-        await this.writeFile(totalIndexFilePath, totalIndexContent); // 写入索引文件
+        await this.writeFile(mainIndexPath, '##### 英语单词索引\n\n' + mainContent);
 
+        // 生成总计 .base 配置文件（总计列）
+        notice.setMessage('索引中... 生成总计索引');
+        const allBasePath = `${indexDir}/英语单词索引.总计.base`;
+        const allBaseContent = `
+filters:
+  and:
+    - file.folder.startsWith("${wordsDir}")
+views:
+  - type: table
+    name: 总计
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日
+${Array.from({ length: 26 }, (_, i) => {
+    const letter = String.fromCharCode(65 + i);
+    return `  - type: table
+    name: 总计.${letter}
+    filters:
+      and:
+        - file.basename.startsWith("${letter.toLowerCase()}")
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日`;
+}).join('\n')}
+`;
+        await this.writeFile(allBasePath, allBaseContent);
 
-        const finalIndexPath = `${indexDir}/英语单词.md`;
-        // 定义表头
-        const header = [
-            `##### 英语单词`,
-            ``,
-            `|                 | [n.](单词索引.名词) | [v.](单词索引.动词) | [adj.](单词索引.形容词) | [adv.](单词索引.副词) | [prep.](单词索引.介词) | [pron.](单词索引.代词) | [det.](单词索引.限定词) | [conj.](单词索引.连词) |`,
-            `| :--------------: | :------------: | :------------: | :---------------: | :--------------: | :---------------: | :---------------: | :---------------: | :---------------: |`,
-            `| [全索引](单词索引.全索引) | [小学](单词索引.小学) | [中考](单词索引.中考) | [高四](单词索引.高考四级)  | [考研](单词索引.考研)   | [六级](单词索引.六级)    | [雅思](单词索引.雅思)    | [托福](单词索引.托福)    | [GRE](单词索引.GRE)  |`,
-            `| ${this.allCards.size}           | ${totalWordsList["级别/小学"]}           | ${totalWordsList["级别/中考"]}          | ${totalWordsList["级别/高考四级"]}             | ${totalWordsList["级别/考研"]}             | ${totalWordsList["级别/六级"]}             | ${totalWordsList["级别/雅思"]}             | ${totalWordsList["级别/托福"]}             | ${totalWordsList["级别/GRE"]}             |`
-        ];
+        // 生成每个级别的 .base 配置文件
+        for (const level of levelConfigs) {
+            notice.setMessage(`索引中... ${level.name}`);
+            const basePath = `${indexDir}/英语单词索引.${level.name}.base`;
 
-        // 定义字母索引行
-        const alphabetRows = [];
-        for (let i = 65; i <= 90; i++) {
-            const letter = String.fromCharCode(i);
-            alphabetRows.push(
-                `| [${letter}](全索引.${letter})      | [${letter}](小学.${letter})     | [${letter}](中考.${letter})     | [${letter}](高考四级.${letter})      | [${letter}](考研.${letter})       | [${letter}](六级.${letter})        | [${letter}](雅思.${letter})        | [${letter}](托福.${letter})        | [${letter}](GRE.${letter})       |`
-            );
+            // 构建 DataviewJS 配置
+            const baseContent = `
+filters:
+  and:
+    - file.folder.startsWith("${wordsDir}")
+    - file.tags.contains("${level.tag}")
+views:
+  - type: table
+    name: ${level.name.split('.').pop()}
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日
+${Array.from({ length: 26 }, (_, i) => {
+    const letter = String.fromCharCode(65 + i);
+    return `  - type: table
+    name: ${level.name.split('.').pop()}.${letter}
+    filters:
+      and:
+        - file.basename.startsWith("${letter.toLowerCase()}")
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日`;
+}).join('\n')}
+`;
+
+            await this.writeFile(basePath, baseContent);
         }
 
-        // 合并表头和字母索引行
-        const finalContent = [...header, ...alphabetRows].join('\n')+'\n';
-        await this.writeFile(finalIndexPath, finalContent); // 写入索引文件
-
-        notice.setMessage("索引生成完成！");
-        setTimeout(() => notice.hide(), 2000); // 2 秒后自动隐藏 Notice
+        notice.setMessage('索引生成完成！');
+        setTimeout(() => notice.hide(), 2000);
     }
 
     // 覆盖写入文件
@@ -513,25 +483,123 @@ export default class OpenWords extends Plugin {
         }
     }
 
-    // 监听单词属性变化并同步到复选框状态
-    async syncMetadataToCheckbox(file: TFile, newCheckbox: string, oldCheckbox: string) {
-        const resolvedLinks = this.app.metadataCache.resolvedLinks;
-        const backlinks: Record<string, number> = {};
-        for (const [sourcePath, links] of Object.entries(resolvedLinks)) {
-            if (links[file.path]) {
-                backlinks[sourcePath] = links[file.path];
-            }
+    // 创建英语单词状态 .base 文件
+    async createWordStatusBaseFile() {
+        const wordsDir = this.settings.folderPath;
+        const indexDir = this.settings.indexPath;
+        const enabledTagsList = this.settings.enabledTags;
+
+        // 创建索引文件夹
+        const existingIndexFolder = this.app.vault.getFolderByPath(indexDir);
+        if (!existingIndexFolder) {
+            await this.app.vault.createFolder(indexDir);
         }
-        for (const [sourcePath, ] of Object.entries(backlinks)) {
-            if (sourcePath.startsWith(this.settings.indexPath)) {
-                const sourceFile = this.app.vault.getFileByPath(sourcePath)
-                if (sourceFile instanceof TFile) {
-                    const newWord = `- [${newCheckbox}] [[${file.basename}]]`;
-                    const oldWord = `- [${oldCheckbox}] [[${file.basename}]]`;
-                    await this.app.vault.process(sourceFile, (data) => data.replace(oldWord, newWord));
-                }
-            }
-        }
+
+        // 构建 enabledTags 的 or 条件
+        const tagFilters = enabledTagsList.map(tag => `            - file.tags.contains("${tag}")`).join('\n');
+
+        // 构建 .base 文件内容
+        const baseContent = `filters:
+  and:
+    - file.folder.startsWith("${wordsDir}")
+views:
+  - type: table
+    name: 总计
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日
+  - type: table
+    name: 待学习
+    filters:
+      and:
+        - or:
+${tagFilters}
+        - and:
+            - 掌握 == false
+        - and:
+            - 重复次数 == 0
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日
+  - type: table
+    name: 待复习
+    filters:
+      and:
+        - or:
+${tagFilters}
+        - and:
+            - 掌握 == false
+        - and:
+            - 重复次数 != 0
+        - and:
+            - 到期日 > today()
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日
+  - type: table
+    name: 今日到期
+    filters:
+      and:
+        - or:
+${tagFilters}
+        - and:
+            - 掌握 == false
+        - and:
+            - 重复次数 != 0
+        - and:
+            - 到期日 <= today()
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日
+  - type: table
+    name: 已掌握
+    filters:
+      and:
+        - and:
+            - 掌握 == true
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日
+  - type: table
+    name: 未启用
+    filters:
+      or:
+        - not:
+${tagFilters}
+        - and:
+            - 掌握 == true
+    order:
+      - 掌握
+      - file.name
+      - 易记因子
+      - 重复次数
+      - 间隔
+      - 到期日
+`;
+
+        // 写入或更新 .base 文件
+        const basePath = `${this.settings.indexPath}/英语单词状态.base`;
+        await this.writeFile(basePath, baseContent);
     }
 
     // 更新状态栏

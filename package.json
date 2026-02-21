@@ -1,6 +1,6 @@
 {
 	"name": "openwords",
-	"version": "1.0.7",
+	"version": "1.0.8",
 	"description": "用于英语学习中背单词与单词管理的插件",
 	"main": "main.js",
 	"type": "module",

@@ -193,8 +193,12 @@ export function registerRenderKeyEvents(this: MainView, learningContainer: HTMLD
         this.renderCard(cardContainer);
         isShowingMarkdown = false;
     };
-    cardContainer.addEventListener('mouseenter', showMarkdown);
-    cardContainer.addEventListener('mouseleave', showWord);
+    
+    // 延迟1秒后注册鼠标事件
+    setTimeout(() => {
+        cardContainer.addEventListener('mouseenter', showMarkdown);
+        cardContainer.addEventListener('mouseleave', showWord);
+    }, 1000);
 
     const handleKeyDown = async (event: KeyboardEvent) => {
         if (event.key === 'Tab') {

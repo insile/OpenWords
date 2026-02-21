@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Component } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Component, Notice } from 'obsidian';
 import { TypePage } from './TypePage';
 import { SpellingPage, pickNextSCard, renderInput, checkSpelling } from './SpellingPage';
 import { LearningPage, pickNextLCard, renderCard, renderSettings, rateCard, registerRatingKeyEvents, registerRenderKeyEvents } from './LearningPage';
@@ -97,10 +97,10 @@ export class MainView extends ItemView {
         // 清空状态栏
         this.statusBarEl.empty();
         
-        // 创建第一行：新单词、待复习、今日到期、已掌握、未启用
+        // 创建第一行：待学习、待复习、今日到期、已掌握、未启用
         const row1 = this.statusBarEl.createDiv({ cls: 'openwords-statusbar-row' });
         
-        this.createStatItem(row1, '新单词', newCount);
+        this.createStatItem(row1, '待学习', newCount);
         this.createStatItem(row1, '待复习', reviewCount);
         this.createStatItem(row1, '今日到期', dueTodayCount);
         this.createStatItem(row1, '已掌握', masteredCount);
@@ -115,5 +115,22 @@ export class MainView extends ItemView {
         const item = container.createDiv({ cls: isTotal ? 'openwords-stat-item total' : 'openwords-stat-item' });
         item.createSpan({ cls: 'openwords-stat-label', text: label });
         item.createSpan({ cls: 'openwords-stat-count', text: count.toString() });
+        
+        // 添加点击事件，打开对应的视图
+        if (isTotal) {
+            item.addEventListener('click', async () => {
+                // 创建单词状态 .base 文件
+                await this.plugin.createWordStatusBaseFile();
+                const basePath = `${this.plugin.settings.indexPath}/英语单词状态.base`;
+                const file = this.app.vault.getFileByPath(basePath);
+                if (!file) {
+                    new Notice('单词状态文件不存在，请先生成索引');
+                    return;
+                }
+                // 打开 .base 文件
+                const leaf = this.app.workspace.getLeaf(false);
+                await leaf.openFile(file);
+            });
+        };
     }
 }
