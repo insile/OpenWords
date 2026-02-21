@@ -355,8 +355,7 @@ export default class OpenWords extends Plugin {
             const tags: string[] = frontMatter.tags || [];
             for (const level of levelConfigs) {
                 if (tags.includes(level.tag)) {
-                    levelWordCounts[level.tag]++;
-                }
+                    levelWordCounts[level.tag] = (levelWordCounts[level.tag] ?? 0) + 1;                }
             }
         });
 
