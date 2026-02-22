@@ -390,13 +390,12 @@ export default class OpenWords extends Plugin {
             ...letterRows
         ].join('\n');
 
-        await this.writeFile(mainIndexPath, '##### 英语单词索引\n\n' + mainContent);
+        await this.writeFile(mainIndexPath, '##### 英语单词索引\n\n' + mainContent + '\n\n');
 
         // 生成总计 .base 配置文件（总计列）
         notice.setMessage('索引中... 生成总计索引');
         const allBasePath = `${indexDir}/英语单词索引.总计.base`;
-        const allBaseContent = `
-filters:
+        const allBaseContent = `filters:
   and:
     - file.folder.startsWith("${wordsDir}")
 views:
@@ -432,9 +431,7 @@ ${Array.from({ length: 26 }, (_, i) => {
             notice.setMessage(`索引中... ${level.name}`);
             const basePath = `${indexDir}/英语单词索引.${level.name}.base`;
 
-            // 构建 DataviewJS 配置
-            const baseContent = `
-filters:
+            const baseContent = `filters:
   and:
     - file.folder.startsWith("${wordsDir}")
     - file.tags.contains("${level.tag}")

@@ -1,7 +1,7 @@
 {
 	"id": "openwords",
 	"name": "OpenWords",
-	"version": "1.0.9",
+	"version": "1.0.10",
 	"minAppVersion": "1.10.0",
 	"description": "用于英语学习中背单词与单词管理的插件",
 	"author": "insile",

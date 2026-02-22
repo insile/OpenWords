@@ -21,6 +21,13 @@ export async function SpellingPage(this: MainView) {
         this.render();
     };
 
+    // ESC 快捷键返回
+    spellingContainer.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+            backBtn.click();
+        }
+    });
+
     await this.renderInput(wordMeaningContainer, inputContainer, feedbackContainer);
 
     // Tab键显示答案

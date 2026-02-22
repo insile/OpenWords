@@ -20,6 +20,13 @@ export async function LearningPage(this: MainView) {
         this.render();
     };
 
+    // ESC 快捷键返回
+    learningContainer.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Escape') {
+            backBtn.click();
+        }
+    });
+
     this.renderCard(cardContainer);
     this.renderSettings(cardContainer, settingsContainer);
 
@@ -198,7 +205,7 @@ export function registerRenderKeyEvents(this: MainView, learningContainer: HTMLD
     setTimeout(() => {
         cardContainer.addEventListener('mouseenter', showMarkdown);
         cardContainer.addEventListener('mouseleave', showWord);
-    }, 1000);
+    }, 0);
 
     const handleKeyDown = async (event: KeyboardEvent) => {
         if (event.key === 'Tab') {
