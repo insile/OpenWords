@@ -2,10 +2,11 @@ import { Setting, Notice, MarkdownRenderer, TFile } from 'obsidian';
 import { SuperMemoGrade } from 'supermemo';
 import { CardInfo } from '../utils/Card';
 import { MainView } from './MainView';
+import { asArray, asDateString, asNumber } from 'utils/Converters';
 
 export async function LearningPage(this: MainView) {
 
-    this.currentLearingCard = this.pickNextLCard();
+    this.currentLearingCard = await this.pickNextLCard();
     if (!this.currentLearingCard) return;
 
     this.viewContainer.empty();
@@ -15,9 +16,9 @@ export async function LearningPage(this: MainView) {
     const settingsContainer = learningContainer.createDiv({ cls: 'openwords-learning-settings' });
 
     backBtn.textContent = '返回';
-    backBtn.onclick = () => {
+    backBtn.onclick = async () => {
         this.page = 'type';
-        this.render();
+        await this.render();
     };
 
     // ESC 快捷键返回
@@ -37,7 +38,7 @@ export async function LearningPage(this: MainView) {
 }
 
 // 选卡逻辑
-export function pickNextLCard(this: MainView) {
+export async function pickNextLCard(this: MainView) {
     const now = window.moment();
     let pool: CardInfo[];
     if (this.page === 'new') {  // 新词排序：间隔降序，间隔相同则易记因子升序
@@ -45,7 +46,7 @@ export function pickNextLCard(this: MainView) {
         if (pool.length === 0) {
             new Notice("已完成所有新词！");
             this.page = 'type';
-            void this.render();
+            await this.render();
             return null;
         }
         pool.sort((a, b) => {
@@ -62,7 +63,7 @@ export function pickNextLCard(this: MainView) {
         if (pool.length === 0) {
             new Notice("没有需要复习的卡片！");
             this.page = 'type';
-            void this.render();
+            await this.render();
             return null;
         }
         pool.sort((a, b) => {
@@ -95,14 +96,15 @@ export function renderCard(this: MainView, cardContainer: HTMLDivElement) {
     const fileCache = this.plugin.app.metadataCache.getFileCache(file);
     const frontMatter = fileCache?.frontmatter;
     if (!frontMatter) { return; }
-    const tags: string[] = (frontMatter.tags || []).map((tag: string) => {
-        const parts = tag.split('/');
-        return parts.length > 1 ? parts[1] : tag;
-    });
-    const dueDate: string = frontMatter["到期日"];
-    const interval: string = frontMatter["间隔"];
-    const efactor: string = frontMatter["易记因子"];
-    const repetition: string = frontMatter["重复次数"];
+    const tags: string[] = asArray(frontMatter.tags)
+        .map((tag: string) => {
+            const parts = tag.split('/');
+            return parts.at(-1) ?? tag; // 如果 at(-1) 失败，退回到原标签
+        });
+    const dueDate: string = asDateString(frontMatter["到期日"]);
+    const interval: number = asNumber(frontMatter["间隔"], 0);
+    const efactor: number = asNumber(frontMatter["易记因子"], 0);
+    const repetition: number = asNumber(frontMatter["重复次数"], 0);
 
     const metaDiv = cardContainer.createDiv({ cls: 'openwords-card-meta' });
     const tagsDiv = metaDiv.createDiv({ cls: 'openwords-card-meta-tags' });
@@ -125,8 +127,8 @@ export function renderSettings(this: MainView, cardContainer: HTMLDivElement, se
         new Setting(settingsContainer)
             .setName(label)
             .addButton(btn => {
-                btn.setButtonText(String(grade+1));
-                btn.buttonEl.setAttribute('data-grade', String(grade+1));
+                btn.setButtonText(String(grade + 1));
+                btn.buttonEl.setAttribute('data-grade', String(grade + 1));
                 btn.onClick(() => this.rateCard(grade, cardContainer));
             });
     }
@@ -137,7 +139,7 @@ export async function rateCard(this: MainView, grade: SuperMemoGrade, cardContai
     if (this.isRating || !this.currentLearingCard) return;
     this.isRating = true;
     await this.plugin.updateCard(this.currentLearingCard, grade, this.page);
-    this.currentLearingCard = this.pickNextLCard();
+    this.currentLearingCard = await this.pickNextLCard();
     this.renderCard(cardContainer);
     this.isRating = false;
 }
@@ -146,12 +148,12 @@ export async function rateCard(this: MainView, grade: SuperMemoGrade, cardContai
 export function registerRatingKeyEvents(this: MainView, learningContainer: HTMLDivElement, cardContainer: HTMLDivElement) {
     const handleKeydown = async (event: KeyboardEvent) => {
         if (event.key >= '1' && event.key <= '6') {
-			if (this.isRating || !this.currentLearingCard) return;
+            if (this.isRating || !this.currentLearingCard) return;
             this.isRating = true;
             this.currentRatingKey = event.key;
             const btn = learningContainer.querySelector(`button[data-grade="${event.key}"]`);
             if (btn) btn.classList.add('active');
-            const grade = parseInt(event.key)-1 as SuperMemoGrade;
+            const grade = parseInt(event.key) - 1 as SuperMemoGrade;
             await this.plugin.updateCard(this.currentLearingCard, grade, this.page);
         }
     };
@@ -165,7 +167,7 @@ export function registerRatingKeyEvents(this: MainView, learningContainer: HTMLD
             if (btn) btn.classList.remove('active');
             this.isRating = false;
             this.currentRatingKey = null;
-            this.currentLearingCard = this.pickNextLCard();
+            this.currentLearingCard = await this.pickNextLCard();
             this.renderCard(cardContainer);
         }
     };
@@ -177,7 +179,7 @@ export function registerRatingKeyEvents(this: MainView, learningContainer: HTMLD
 export function registerRenderKeyEvents(this: MainView, learningContainer: HTMLDivElement, cardContainer: HTMLDivElement) {
     let isShowingMarkdown = false;
     const showMarkdown = async () => {
-		if (isShowingMarkdown || !this.currentLearingCard) return;
+        if (isShowingMarkdown || !this.currentLearingCard) return;
         const file = this.plugin.app.vault.getFileByPath(this.currentLearingCard.path);
         if (file instanceof TFile) {
             const markdownContent = await this.plugin.app.vault.cachedRead(file);
@@ -200,10 +202,10 @@ export function registerRenderKeyEvents(this: MainView, learningContainer: HTMLD
         this.renderCard(cardContainer);
         isShowingMarkdown = false;
     };
-    
+
     // 延迟1秒后注册鼠标事件
     setTimeout(() => {
-        cardContainer.addEventListener('mouseenter', showMarkdown);
+        cardContainer.addEventListener('mouseenter', () => { void showMarkdown(); });
         cardContainer.addEventListener('mouseleave', showWord);
     }, 0);
 

@@ -1,4 +1,4 @@
-import { App, Notice, PluginSettingTab, Setting, normalizePath } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting, TextComponent, normalizePath } from 'obsidian';
 import { FolderSuggest, TagHistorySuggest } from '../utils/InputSuggest';
 import { DEFAULT_SETTINGS } from './SettingData';
 import OpenWords from '../main';
@@ -7,6 +7,7 @@ import OpenWords from '../main';
 // 插件设置选项卡
 export class OpenWordsSettingTab extends PluginSettingTab {
     plugin: OpenWords;
+    tagTextInput: TextComponent | null = null;
 
     constructor(app: App, plugin: OpenWords) {
         super(app, plugin);
@@ -14,7 +15,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
     }
 
     display(): void {
-        const {containerEl} = this;
+        const { containerEl } = this;
         containerEl.empty();
 
         // 初始化设置快照
@@ -75,74 +76,74 @@ export class OpenWordsSettingTab extends PluginSettingTab {
             }
         };
 
+        // 添加标签的处理函数
+        const handleAddTag = (val: string) => {
+            const value = val.trim();
+            if (!value) {
+                new Notice('请输入标签名称！');
+                return;
+            }
+
+            const { enabledTags, tagHistory } = this.plugin.settingsSnapshot;
+
+            if (enabledTags.includes(value)) {
+                new Notice('该标签已存在！');
+                return;
+            }
+
+            // 更新数据
+            enabledTags.push(value);
+            if (!tagHistory.includes(value)) {
+                tagHistory.push(value);
+            }
+
+            // 渲染 UI 并清空输入（清空逻辑在回调中处理）
+            renderTags();
+            return true; // 表示添加成功
+        };
+
         // 添加标签输入与历史建议
         new Setting(containerEl)
             .setName('添加标签')
             .setDesc('输入新的标签名称，例如 "级别/小学"')
             .addText(text => {
                 text.setPlaceholder('输入标签名称');
-                text.onChange(async (value) => {
-                    (text.inputEl as any).currentValue = value;
-                });
 
+                // 使用该引用，不再需要 (text.inputEl as any).currentValue
+                const inputEl = text.inputEl;
+
+                // 初始化建议器
                 new TagHistorySuggest(
                     this.app,
-                    text.inputEl,
+                    inputEl,
                     this.plugin.settingsSnapshot.tagHistory || [],
-                    (selectedValue) => text.setValue(selectedValue),
+                    (selectedValue) => void text.setValue(selectedValue),
                     async (valueToDelete) => {
-                        const index = this.plugin.settingsSnapshot.tagHistory.indexOf(valueToDelete);
-                        if (index > -1) {
-                            this.plugin.settingsSnapshot.tagHistory.splice(index, 1);
-                        }
+                        const history = this.plugin.settingsSnapshot.tagHistory;
+                        const index = history.indexOf(valueToDelete);
+                        if (index > -1) history.splice(index, 1);
                     }
                 );
 
-                text.inputEl.addEventListener('keydown', (e) => {
+                // 监听回车键
+                inputEl.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
-                        const value = (text.inputEl as any).value?.trim();
-                        if (value && !this.plugin.settingsSnapshot.enabledTags.includes(value)) {
-                            this.plugin.settingsSnapshot.enabledTags.push(value);
-                            if (!this.plugin.settingsSnapshot.tagHistory.includes(value)) {
-                                this.plugin.settingsSnapshot.tagHistory.push(value);
-                            }
-                            renderTags();
-                            text.setValue('');
-                        } else if (value && this.plugin.settingsSnapshot.enabledTags.includes(value)) {
-                            new Notice('该标签已存在！');
+                        if (handleAddTag(text.getValue())) {
+                            text.setValue(''); // 添加成功后清空
                         }
                     }
                 });
+
+                // 存储 text 引用供外部按钮使用（可选，但更优雅）
+                this.tagTextInput = text;
             })
             .addButton(button => button
                 .setButtonText('添加')
+                .setCta() // 设置为强调色按钮
                 .onClick(() => {
-                    const inputs = containerEl.querySelectorAll('input[type="text"]');
-                    let tagInput = '';
-                    for (let i = inputs.length - 1; i >= 0; i--) {
-                        const input = inputs[i] as HTMLInputElement;
-                        if (input.placeholder === '输入标签名称') {
-                            tagInput = input.value?.trim() || '';
-                            break;
-                        }
-                    }
-                    if (tagInput && !this.plugin.settingsSnapshot.enabledTags.includes(tagInput)) {
-                        this.plugin.settingsSnapshot.enabledTags.push(tagInput);
-                        if (!this.plugin.settingsSnapshot.tagHistory.includes(tagInput)) {
-                            this.plugin.settingsSnapshot.tagHistory.push(tagInput);
-                        }
-                        renderTags();
-                        for (let i = inputs.length - 1; i >= 0; i--) {
-                            const input = inputs[i] as HTMLInputElement;
-                            if (input.placeholder === '输入标签名称') {
-                                input.value = '';
-                                break;
-                            }
-                        }
-                    } else if (tagInput && this.plugin.settingsSnapshot.enabledTags.includes(tagInput)) {
-                        new Notice('该标签已存在！');
-                    } else {
-                        new Notice('请输入标签名称！');
+                    // 直接利用上文的 text 引用
+                    if (this.tagTextInput && handleAddTag(this.tagTextInput.getValue())) {
+                        this.tagTextInput.setValue('');
                     }
                 }));
 
@@ -161,7 +162,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                     button.setDisabled(true);
                     button.setButtonText('处理中...');
                     try {
-                        this.plugin.settings = {...this.plugin.settingsSnapshot};
+                        this.plugin.settings = { ...this.plugin.settingsSnapshot };
                         this.plugin.settings.enabledTags = [...this.plugin.settingsSnapshot.enabledTags];
                         this.plugin.settings.tagHistory = [...(this.plugin.settingsSnapshot.tagHistory || this.plugin.settingsSnapshot.enabledTags)];
                         await this.plugin.saveSettings();
@@ -178,7 +179,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                         button.setDisabled(false);
                         button.setButtonText('扫描');
                     }
-            }));
+                }));
 
         new Setting(containerEl)
             .setName('生成索引')
@@ -198,7 +199,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                         button.setDisabled(false);
                         button.setButtonText('生成');
                     }
-            }));
+                }));
 
         new Setting(containerEl)
             .setName("随机调度概率")
@@ -245,7 +246,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                         new Notice('已恢复默认设置');
                         // 重新渲染设置页以反映默认值
                         this.display();
-                        this.plugin.settings = {...this.plugin.settingsSnapshot};
+                        this.plugin.settings = { ...this.plugin.settingsSnapshot };
                         this.plugin.settings.enabledTags = [...this.plugin.settingsSnapshot.enabledTags];
                         this.plugin.settings.tagHistory = [...(this.plugin.settingsSnapshot.tagHistory || this.plugin.settingsSnapshot.enabledTags)];
                         await this.plugin.saveSettings();
@@ -282,6 +283,6 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                         button.setDisabled(false);
                         button.setButtonText('重置单词属性');
                     }
-            }));
+                }));
     }
 }

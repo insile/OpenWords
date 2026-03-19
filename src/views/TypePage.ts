@@ -15,10 +15,10 @@ export function TypePage(this: MainView) {
         .addButton(btn => {
             const button = btn
                 .setButtonText("开始")
-                .onClick(() => {
+                .onClick(async () => {
                     if (this.plugin.newCards.size > 0) {
                         this.page = 'new';
-                        void this.render();
+                        await this.render();
                     } else {
                         new Notice("没有新词可学了！");
                     }
@@ -32,10 +32,10 @@ export function TypePage(this: MainView) {
         .addButton(btn => {
             const button = btn
                 .setButtonText("开始")
-                .onClick(() => {
+                .onClick(async () => {
                     if (this.plugin.dueCards.size > 0) {
                         this.page = 'old';
-                        void this.render();
+                        await this.render();
                     } else {
                         new Notice("没有需要复习的单词！");
                     }
@@ -49,10 +49,10 @@ export function TypePage(this: MainView) {
         .addButton(btn => {
             const button = btn
                 .setButtonText('开始')
-                .onClick(() => {
+                .onClick(async () => {
                     if (this.plugin.dueCards.size > 0) {
                         this.page = 'spelling';
-                        void this.render();
+                        await this.render();
                     } else {
                         new Notice("没有需要默写的单词！");
                     }

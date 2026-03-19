@@ -4,7 +4,7 @@ import { MainView } from './MainView';
 
 export async function SpellingPage(this: MainView) {
 
-    this.currentSpellingCard = this.pickNextSCard();
+    this.currentSpellingCard = await this.pickNextSCard();
     if (!this.currentSpellingCard) return;
 
     this.viewContainer.empty();
@@ -16,9 +16,9 @@ export async function SpellingPage(this: MainView) {
     const feedbackContainer = spellingContainer.createDiv({ cls: 'openwords-spelling-feedback' });
 
     backBtn.textContent = '返回';
-    backBtn.onclick = () => {
+    backBtn.onclick = async () => {
         this.page = 'type';
-        this.render();
+        await this.render();
     };
 
     // ESC 快捷键返回
@@ -51,7 +51,7 @@ export async function SpellingPage(this: MainView) {
 
 }
 
-export function pickNextSCard(this: MainView) {
+export async function pickNextSCard(this: MainView) {
     // 从易记因子最低的50%中随机选择一个单词
     this.hasPeeked = false;
     this.errorCount = 0;
@@ -60,7 +60,7 @@ export function pickNextSCard(this: MainView) {
     if (cards.length === 0) {
         new Notice("已完成所有单词！");
         this.page = 'type';
-        void this.render();
+        await this.render();
         return null;
     }
     const sorted = cards.slice().sort((a, b) => a.efactor - b.efactor);
@@ -115,7 +115,7 @@ export async function renderInput(
                 if (inputField.value.length === 1 && i < word.length - 1) {
                     inputFields[i + 1]?.focus();
                 }
-                this.checkSpelling(inputFields, word, feedbackContainer, wordMeaningContainer, inputContainer);
+                void this.checkSpelling(inputFields, word, feedbackContainer, wordMeaningContainer, inputContainer);
             });
 
             inputField.addEventListener('keydown', (event) => {
@@ -144,11 +144,10 @@ export async function checkSpelling(
 
 			if (!this.plugin.dueCards.has(word)) {
 				new Notice("当前单词不属于本模式范围, 评分无效并跳过");
-				setTimeout(async () => {
-					this.currentSpellingCard = this.pickNextSCard();
-					if (!this.currentSpellingCard) return;
-					await this.renderInput(wordMeaningContainer, inputContainer, feedbackContainer);
-				}, 500);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            this.currentSpellingCard = await this.pickNextSCard();
+            if (!this.currentSpellingCard) return;
+            await this.renderInput(wordMeaningContainer, inputContainer, feedbackContainer);
 				return
 			}
 
@@ -167,18 +166,17 @@ export async function checkSpelling(
                 // 同步到 frontmatter
                 const file = this.plugin.app.vault.getFileByPath(this.currentSpellingCard.path);
                 if (file instanceof TFile) {
-                    await this.plugin.app.fileManager.processFrontMatter(file, (frontMatter) => {
+                    await this.plugin.app.fileManager.processFrontMatter(file, (frontMatter: Record<string, unknown>) => {
                         frontMatter["易记因子"] = Math.round(efactor * 100);
                     });
                 }
 
                 new Notice(`${this.currentSpellingCard.front} \n易记因子: ${efactor.toFixed(2)} \n重复次数: ${this.currentSpellingCard.repetition} \n间隔: ${this.currentSpellingCard.interval} \n到期日: ${this.currentSpellingCard.dueDate}`);
             }
-            setTimeout(async () => {
-                this.currentSpellingCard = this.pickNextSCard();
-                if (!this.currentSpellingCard) return;
-                await this.renderInput(wordMeaningContainer, inputContainer, feedbackContainer);
-            }, 500);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            this.currentSpellingCard = await this.pickNextSCard();
+            if (!this.currentSpellingCard) return;
+            await this.renderInput(wordMeaningContainer, inputContainer, feedbackContainer);
         } else {
             feedbackContainer.setText('错误，请重试！');
             this.errorCount += 1;

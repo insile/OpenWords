@@ -5,13 +5,14 @@ import { MainView, MAIN_VIEW, PageType } from './views/MainView';
 import { CardInfo } from './utils/Card';
 import { supermemo, SuperMemoGrade } from 'supermemo';
 import posTagger from 'wink-pos-tagger';
+import { asArray, asNumber, asDateString } from 'utils/Converters';
 
 
 // 插件主类
 export default class OpenWords extends Plugin {
     settings: OpenWordsSettings;  // 插件设置
     settingsSnapshot: OpenWordsSettings;  // 插件设置快照
-	tagger: posTagger = new posTagger();  // 词性标注器实例
+    tagger: posTagger = new posTagger();  // 词性标注器实例
     allCards: Map<string, CardInfo> = new Map(); // 所有单词
     masterCards: Map<string, CardInfo> = new Map(); // 掌握单词
     enabledCards: Map<string, CardInfo> = new Map(); // 启用单词
@@ -26,6 +27,7 @@ export default class OpenWords extends Plugin {
         // 加载插件设置参数, 设置选项卡, 左侧工具栏按钮, 注册主视图
         await this.loadSettings();
         this.addSettingTab(new OpenWordsSettingTab(this.app, this));
+        // eslint-disable-next-line obsidianmd/ui/sentence-case
         this.addRibbonIcon('slack', 'OpenWords', async () => { await this.activateView(); });
         this.registerView(MAIN_VIEW, (leaf) => new MainView(leaf, this));
 
@@ -35,18 +37,43 @@ export default class OpenWords extends Plugin {
             this.addCommand({
                 id: 'LearningTypeModal',
                 name: '学习视图',
-                callback: () => {
-                    this.activateView();
+                callback: async () => {
+                    await this.activateView();
                 }
             });
             // 添加双链命令
             this.addCommand({
                 id: 'addDoubleBrackets',
-                name: '添加双链',
-                editorCallback: () => {
-                    this.addDoubleBrackets();
+                name: '文档双链',
+                editorCallback: async () => {
+                    await this.addDoubleBrackets();
                 }
             });
+            // 添加单词双链命令
+            this.addCommand({
+                id: 'addDoubleBracketsWord',
+                name: '单词双链',
+                editorCallback: async () => {
+                    await this.autoDoubleLinkWord();
+                }
+            });
+            // 注册编辑器菜单
+            this.registerEvent(
+                this.app.workspace.on("editor-menu", (menu, editor, view) => {
+                    const selection = editor.getSelection().trim();
+                    if (!selection) return;
+
+                    menu.addItem((item) => {
+                        item
+                            .setTitle(`链接 "${selection}" 到单词库`)
+                            .setIcon("link")
+                            .onClick(async () => {
+                                // 执行上面提到的搜索和替换逻辑
+                                await this.autoDoubleLinkWord();
+                            });
+                    });
+                })
+            );
             // 注册文件监听器
             this.registerFileWatchers();
             // 扫描所有单词文件, 更新状态栏
@@ -75,13 +102,13 @@ export default class OpenWords extends Plugin {
     // 加载单词元数据
     async loadWordMetadata(file: TFile, single = true) {
         const allCards = this.allCards;
-		const masterCards = this.masterCards;
+        const masterCards = this.masterCards;
         const enabledCards = this.enabledCards;
         const newCards = this.newCards;
         const dueCards = this.dueCards;
 
         // 先删除旧的单词元数据
-		masterCards.delete(file.basename);
+        masterCards.delete(file.basename);
         enabledCards.delete(file.basename);
         newCards.delete(file.basename);
         dueCards.delete(file.basename);
@@ -95,44 +122,30 @@ export default class OpenWords extends Plugin {
             allCards.delete(file.basename);
             if (single) { this.updateStatusBar(); }
             return;
-		}
+        }
 
-        const tags: string[] = frontMatter.tags || [];
+        // 解析 FrontMatter 中的单词属性
+        const tags: string[] = asArray(frontMatter.tags);
         const isMastered = frontMatter["掌握"] === true;
         const isTagged = tags.some(tag => this.settings.enabledTags.includes(tag));
 
         const card: CardInfo = {
             front: file.basename,
             path: file.path,
-            dueDate: frontMatter["到期日"],
-            interval: frontMatter["间隔"],
-            efactor: frontMatter["易记因子"] * 0.01,
-            repetition: frontMatter["重复次数"],
+            dueDate: asDateString(frontMatter["到期日"]),
+            interval: asNumber(frontMatter["间隔"], 0),
+            efactor: asNumber(frontMatter["易记因子"], 250) * 0.01,
+            repetition: asNumber(frontMatter["重复次数"], 0),
             isMastered: isMastered,
         };
-        if (
-            !card.front ||
-            !card.path ||
-            card.dueDate === undefined ||
-            card.interval === undefined ||
-            card.efactor === undefined ||
-            card.repetition === undefined ||
-            Number.isNaN(card.efactor) ||
-            Number.isNaN(card.interval) ||
-            Number.isNaN(card.repetition)
-        ) {
-            allCards.delete(file.basename);
-            if (single) { this.updateStatusBar(); }
-            return;
+
+        // 更新所有单词
+        allCards.set(card.front, card);
+
+        // 更新掌握单词
+        if (isMastered) {
+            masterCards.set(card.front, card);
         }
-
-		// 更新所有单词
-		allCards.set(card.front, card);
-
-		// 更新掌握单词
-		if (isMastered) {
-			masterCards.set(card.front, card);
-		}
 
         // 更新启用单词, 新单词, 旧单词
         if (isTagged && !isMastered) {
@@ -151,19 +164,19 @@ export default class OpenWords extends Plugin {
     // 扫描所有单词文件
     async scanAllNotes() {
         this.allCards.clear();
-		this.masterCards.clear();
+        this.masterCards.clear();
         this.enabledCards.clear();
         this.newCards.clear();
         this.dueCards.clear();
-		const normalized = this.settings.folderPath.endsWith("/")
-			? this.settings.folderPath
-			: this.settings.folderPath + "/";
+        const normalized = this.settings.folderPath.endsWith("/")
+            ? this.settings.folderPath
+            : this.settings.folderPath + "/";
         const files = this.app.vault.getMarkdownFiles();
         const filteredFiles = files.filter(file => file.path.startsWith(normalized));
 
         if (filteredFiles.length === 0) {
             new Notice('指定的文件夹下没有 Markdown 文件！');
-			this.updateStatusBar()
+            this.updateStatusBar()
             return;
         }
 
@@ -186,28 +199,38 @@ export default class OpenWords extends Plugin {
         const newDate = window.moment().add(result.interval, 'day').format('YYYY-MM-DD');
         const file = this.app.vault.getFileByPath(card.path);
 
-		if (!file) {
+        if (!file) {
             new Notice(`文件 ${card.path} 不存在！`);
             return;
         }
 
-        await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
+        await this.app.fileManager.processFrontMatter(file, (frontMatter: Record<string, unknown>) => {
             frontMatter["到期日"] = newDate;
             frontMatter["间隔"] = result.interval;
             frontMatter["易记因子"] = Math.round(result.efactor * 100);
             frontMatter["重复次数"] = result.repetition;
         });
 
-		new Notice(`${card.front} \n易记因子: ${result.efactor.toFixed(2)} \n重复次数: ${result.repetition} \n间隔: ${result.interval} \n到期日: ${newDate}`);
+        new Notice(`${card.front} \n易记因子: ${result.efactor.toFixed(2)} \n重复次数: ${result.repetition} \n间隔: ${result.interval} \n到期日: ${newDate}`);
 
         // 等待元数据缓存更新（最多等待 1 秒）
         let attempts = 0;
-        while (attempts < 5) {
-            const updated = this.app.metadataCache.getFileCache(file);
-            if (updated?.frontmatter?.["到期日"] === newDate) {
-                break; // 缓存已更新
+        while (attempts < 20) {
+            if (mode === 'new') {
+                if (grade >= 3 && this.dueCards.has(card.front)) {
+                    break; // 以移出新单词池
+                } else if (grade < 3) {
+                    break;
+                }
             }
-            await new Promise(resolve => setTimeout(resolve, 200));
+            else {
+                if (grade < 3 && this.newCards.has(card.front)) {
+                    break; // 以移出旧单词池
+                } else if (grade >= 3 && this.dueCards.get(card.front)?.efactor === result.efactor) {
+                    break;
+                }
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
             attempts++;
         }
     }
@@ -218,10 +241,10 @@ export default class OpenWords extends Plugin {
             new Notice("没有单词需要重置！");
             return;
         }
-        
+
         // // 注销监听器，避免重置过程中触发大量缓存更新事件
         // this.unregisterFileWatchers();
-        
+
         const notice = new Notice('重置中...', 0); // 创建一个持续显示的 Notice
         let count = 0; // 计数器
         const cardList = Array.from(this.enabledCards.values()); // 将 Map 转换为数组
@@ -229,7 +252,7 @@ export default class OpenWords extends Plugin {
         const concurrency = 10; // 并发处理数量
         const todayDate = window.moment().format('YYYY-MM-DD'); // 提前计算日期，避免重复计算
         let updateFrequency = Math.max(1, Math.floor(total / 50)); // 减少更新频率到 2%
-        
+
         // 创建并发处理任务
         const processTasks = async () => {
             for (let i = 0; i < cardList.length; i += concurrency) {
@@ -237,7 +260,7 @@ export default class OpenWords extends Plugin {
                 await Promise.all(chunk.map(async (card) => {
                     const file = this.app.vault.getFileByPath(card.path);
                     if (file) {
-                        await this.app.fileManager.processFrontMatter(file, (frontMatter) => {
+                        await this.app.fileManager.processFrontMatter(file, (frontMatter: Record<string, unknown>) => {
                             frontMatter["到期日"] = todayDate;
                             frontMatter["间隔"] = 0;
                             frontMatter["易记因子"] = 250;
@@ -257,7 +280,8 @@ export default class OpenWords extends Plugin {
             await processTasks();
             notice.setMessage(`重置完成！共 ${count} 个单词`);
         } catch (error) {
-            new Notice(`重置出错: ${error}`);
+            const message = error instanceof Error ? error.message : String(error);
+            new Notice(`重置出错: ${message}`);
             console.error('Reset card error:', error);
         } finally {
             // // 重新注册监听器
@@ -268,7 +292,7 @@ export default class OpenWords extends Plugin {
             setTimeout(() => notice.hide(), 2000); // 2 秒后自动隐藏 Notice
         }
     }
-    
+
     // 建立单词双链
     async addDoubleBrackets() {
         const unmasteredWords = new Set(Array.from(this.enabledCards.values())
@@ -307,7 +331,7 @@ export default class OpenWords extends Plugin {
                     return word; // 否则返回原始单词
                 }
             });
-            const updatedContent =  updatedWords.join('');
+            const updatedContent = updatedWords.join('');
 
             doc.setValue(updatedContent); // 用更新后的内容替换原文
             new Notice('已添加双链！');
@@ -317,7 +341,7 @@ export default class OpenWords extends Plugin {
     // 生成单词索引 .base 文件
     async generateIndex() {
         const notice = new Notice('索引中...', 0);
-        
+
         // 从设置读取标签并转换为配置对象（将多级标签的 '/' 替换为 '.'）
         const levelConfigs = this.settings.enabledTags.map(tag => {
             const name = tag.replace(/\//g, '.');
@@ -352,10 +376,11 @@ export default class OpenWords extends Plugin {
             const frontMatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
             if (!frontMatter) return;
 
-            const tags: string[] = frontMatter.tags || [];
+            const tags: string[] = asArray(frontMatter.tags);
             for (const level of levelConfigs) {
                 if (tags.includes(level.tag)) {
-                    levelWordCounts[level.tag] = (levelWordCounts[level.tag] ?? 0) + 1;                }
+                    levelWordCounts[level.tag] = (levelWordCounts[level.tag] ?? 0) + 1;
+                }
             }
         });
 
@@ -409,8 +434,8 @@ views:
       - 间隔
       - 到期日
 ${Array.from({ length: 26 }, (_, i) => {
-    const letter = String.fromCharCode(65 + i);
-    return `  - type: table
+            const letter = String.fromCharCode(65 + i);
+            return `  - type: table
     name: 总计.${letter}
     filters:
       and:
@@ -422,7 +447,7 @@ ${Array.from({ length: 26 }, (_, i) => {
       - 重复次数
       - 间隔
       - 到期日`;
-}).join('\n')}
+        }).join('\n')}
 `;
         await this.writeFile(allBasePath, allBaseContent);
 
@@ -446,8 +471,8 @@ views:
       - 间隔
       - 到期日
 ${Array.from({ length: 26 }, (_, i) => {
-    const letter = String.fromCharCode(65 + i);
-    return `  - type: table
+                const letter = String.fromCharCode(65 + i);
+                return `  - type: table
     name: ${level.name.split('.').pop()}.${letter}
     filters:
       and:
@@ -459,7 +484,7 @@ ${Array.from({ length: 26 }, (_, i) => {
       - 重复次数
       - 间隔
       - 到期日`;
-}).join('\n')}
+            }).join('\n')}
 `;
 
             await this.writeFile(basePath, baseContent);
@@ -598,12 +623,36 @@ ${tagFilters}
         await this.writeFile(basePath, baseContent);
     }
 
+    // 自动为选中单词添加双链
+    async autoDoubleLinkWord() {
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!activeView) {
+            new Notice("请在 Markdown 编辑器中使用此命令");
+            return;
+        }
+        const editor = activeView.editor;
+        const selection = editor.getSelection().trim();
+        if (!selection) {
+            new Notice("请先选中一个单词");
+            return;
+        }
+        const word = this.tagger.tagSentence(selection.toLowerCase())[0];
+        const lemma = word?.lemma ?? selection.toLowerCase();
+        if (this.allCards.has(lemma)) {
+            editor.replaceSelection(`[[${lemma}|${selection}]]`);
+            new Notice(`已成功链接到: ${selection}`);
+        } else {
+            // 4. 如果文件不存在，可以提示或提供创建选项
+            new Notice(`单词库中未找到 "${selection}"`);
+        }
+    }
+
     // 更新状态栏
-    updateStatusBar(){
+    updateStatusBar() {
         this.app.workspace.getLeavesOfType(MAIN_VIEW).forEach(leaf => {
             const view = leaf.view;
             if (view instanceof MainView) {
-                void view.updateStatusBar();
+                view.updateStatusBar();
             }
         });
     }
@@ -619,9 +668,9 @@ ${tagFilters}
             : this.settings.folderPath + "/";
 
         // 监听单词文件创建事件
-        const createRef = this.app.vault.on("create", (file: TFile) => {
+        const createRef = this.app.vault.on("create", async (file: TFile) => {
             if (file.path.endsWith(".md") && file.path.startsWith(this.currentFolderPath)) {
-                this.loadWordMetadata(file);
+                await this.loadWordMetadata(file);
             }
         });
         this.fileWatcherRefs.push(createRef);
@@ -640,9 +689,9 @@ ${tagFilters}
         this.fileWatcherRefs.push(deleteRef);
 
         // 监听单词文件缓存修改事件
-        const changedRef = this.app.metadataCache.on("changed", (file) => {
+        const changedRef = this.app.metadataCache.on("changed", async (file) => {
             if (file.path.endsWith(".md") && file.path.startsWith(this.currentFolderPath)) {
-                this.loadWordMetadata(file);
+                await this.loadWordMetadata(file);
             }
         });
         this.fileWatcherRefs.push(changedRef);
@@ -662,13 +711,13 @@ ${tagFilters}
         this.registerFileWatchers();
     }
 
-	onunload() {
+    onunload() {
         // 清理文件监听器
         this.unregisterFileWatchers();
     }
 
     async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<OpenWordsSettings>);
     }
 
     async saveSettings() {
