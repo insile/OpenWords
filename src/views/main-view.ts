@@ -1,51 +1,31 @@
 import { ItemView, WorkspaceLeaf, Component, Notice } from 'obsidian';
-import { TypePage } from './TypePage';
-import { SpellingPage, pickNextSCard, renderInput, checkSpelling } from './SpellingPage';
-import { LearningPage, pickNextLCard, renderCard, renderSettings, rateCard, registerRatingKeyEvents, registerRenderKeyEvents } from './LearningPage';
-import { CardInfo } from '../utils/Card';
 import OpenWords from '../main';
+import { createWordStatusBaseFile } from 'service/index-manager';
+import { HomePage } from './home-page';
+import { LearningPage } from './learning-page';
+import { SpellingPage } from './spelling-page';
 
-export const MAIN_VIEW = "openwords-view";
-export type PageType = 'type' | 'new' | 'old' | 'spelling';
+export const OPENWORDS_VIEW = "openwords-view";
+export type PageType = 'home' | 'new' | 'old' | 'spelling';
 
-export class MainView extends ItemView {
+export class OpenWordsView extends ItemView {
     // 主视图
     plugin: OpenWords;
-    page: PageType = 'type';
+    page: PageType = 'home';
     component: Component;
     viewContainer: HTMLDivElement;
     statusBarEl: HTMLDivElement;
-    // 学习分类页面
-    TypePage = TypePage;
-    // 单词学习页面
-    currentLearingCard: CardInfo | null = null;
-    isRating = false;
-    currentRatingKey: string | null = null;
-    LearningPage = LearningPage
-    pickNextLCard = pickNextLCard;
-    renderCard = renderCard;
-    renderSettings = renderSettings;
-    rateCard = rateCard;
-    registerRatingKeyEvents = registerRatingKeyEvents;
-    registerRenderKeyEvents = registerRenderKeyEvents;
-    // 单词拼写页面
-    currentSpellingCard: CardInfo | null = null;
-    selectedLetter: string | null = null;
-    selectedLevel: string | null = null;
-    hasPeeked = false;
-    errorCount = 0;
-    SpellingPage = SpellingPage
-    pickNextSCard = pickNextSCard
-    renderInput = renderInput
-    checkSpelling = checkSpelling;
-
+    homepage: HomePage;
+    learningpage: LearningPage;
+    spellingpage: SpellingPage;
+    
     constructor(leaf: WorkspaceLeaf, plugin: OpenWords) {
         super(leaf);
         this.plugin = plugin;
         this.component = new Component();
     }
 
-    getViewType() { return MAIN_VIEW; }
+    getViewType() { return OPENWORDS_VIEW; }
     // eslint-disable-next-line obsidianmd/ui/sentence-case
     getDisplayText() { return "OpenWords"; }
     getIcon(): string { return "slack"; }
@@ -68,17 +48,21 @@ export class MainView extends ItemView {
         this.viewContainer.empty();
 
         switch (this.page) {
-            case 'type':
-                this.TypePage();
+            case 'home':
+                this.homepage = new HomePage(this);
+                await this.homepage.render();
                 break;
             case 'new':
-                await this.LearningPage();
+                this.learningpage = new LearningPage(this);
+                await this.learningpage.render();
                 break;
             case 'old':
-                await this.LearningPage();
+                this.learningpage = new LearningPage(this);
+                await this.learningpage.render();
                 break;
             case 'spelling':
-                await this.SpellingPage();
+                this.spellingpage = new SpellingPage(this);
+                await this.spellingpage.render();
                 break;
         }
     }
@@ -124,7 +108,7 @@ export class MainView extends ItemView {
                 void (async () => {
                     try {
                         // 创建单词状态 .base 文件
-                        await this.plugin.createWordStatusBaseFile();
+                        await createWordStatusBaseFile(this.plugin);
 
                         const basePath = `${this.plugin.settings.indexPath}/英语单词状态.base`;
                         const file = this.app.vault.getFileByPath(basePath);

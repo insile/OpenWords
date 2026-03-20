@@ -1,7 +1,12 @@
 import { App, Notice, PluginSettingTab, Setting, TextComponent, normalizePath } from 'obsidian';
-import { FolderSuggest, TagHistorySuggest } from '../utils/InputSuggest';
-import { DEFAULT_SETTINGS } from './SettingData';
+import { FolderSuggest, TagHistorySuggest } from '../utils/input-suggest';
+import { DEFAULT_SETTINGS } from './setting-data';
 import OpenWords from '../main';
+import { updateStatusBar } from 'utils/process';
+import { OPENWORDS_VIEW } from '../views/main-view';
+import { resetCard, scanAllNotes } from 'service/words-manager';
+import { registerFileWatchers } from 'service/register';
+import { createWordStatusBaseFile, generateIndex } from 'service/index-manager';
 
 
 // 插件设置选项卡
@@ -167,11 +172,11 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                         this.plugin.settings.tagHistory = [...(this.plugin.settingsSnapshot.tagHistory || this.plugin.settingsSnapshot.enabledTags)];
                         await this.plugin.saveSettings();
                         // 重新初始化文件监听器
-                        await this.plugin.reinitializeFileWatchers();
-                        await this.plugin.scanAllNotes();
+                        registerFileWatchers(this.plugin);
+                        await scanAllNotes(this.plugin);
                         new Notice(`扫描完成！共 ${this.plugin.allCards.size} 个单词`);
-                        await this.plugin.createWordStatusBaseFile();
-                        this.plugin.updateStatusBar();
+                        await createWordStatusBaseFile(this.plugin);
+                        updateStatusBar(this.app, OPENWORDS_VIEW);
                     } catch (error) {
                         console.error('缓存过程中发生错误:', error);
                         new Notice('缓存失败，请检查控制台日志！');
@@ -191,7 +196,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                     button.setDisabled(true);
                     button.setButtonText('处理中...');
                     try {
-                        await this.plugin.generateIndex();
+                        await generateIndex(this.plugin);
                     } catch (error) {
                         console.error('生成索引过程中发生错误:', error);
                         new Notice('生成索引失败，请检查控制台日志！');
@@ -251,11 +256,11 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                         this.plugin.settings.tagHistory = [...(this.plugin.settingsSnapshot.tagHistory || this.plugin.settingsSnapshot.enabledTags)];
                         await this.plugin.saveSettings();
                         // 重新初始化文件监听器
-                        await this.plugin.reinitializeFileWatchers();
-                        await this.plugin.scanAllNotes();
+                        registerFileWatchers(this.plugin);
+                        await scanAllNotes(this.plugin);
                         new Notice(`扫描完成！共 ${this.plugin.allCards.size} 个单词`);
-                        await this.plugin.createWordStatusBaseFile();
-                        this.plugin.updateStatusBar();
+                        await createWordStatusBaseFile(this.plugin);
+                        updateStatusBar(this.app, OPENWORDS_VIEW);
                     } catch (error) {
                         console.error('恢复默认设置失败:', error);
                         new Notice('恢复失败，请检查控制台日志！');
@@ -275,7 +280,7 @@ export class OpenWordsSettingTab extends PluginSettingTab {
                     button.setDisabled(true);
                     button.setButtonText('处理中...');
                     try {
-                        await this.plugin.resetCard();
+                        await resetCard(this.plugin);
                     } catch (error) {
                         console.error('重置过程中发生错误:', error);
                         new Notice('重置失败，请检查控制台日志！');
