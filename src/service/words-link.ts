@@ -1,4 +1,4 @@
-import OpenWords from "main";
+import OpenWords from "../main";
 import { MarkdownView, Notice } from "obsidian";
 
 

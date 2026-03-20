@@ -1,6 +1,6 @@
 import { ItemView, WorkspaceLeaf, Component, Notice } from 'obsidian';
 import OpenWords from '../main';
-import { createWordStatusBaseFile } from 'service/index-manager';
+import { createWordStatusBaseFile } from '../service/index-manager';
 import { HomePage } from './home-page';
 import { LearningPage } from './learning-page';
 import { SpellingPage } from './spelling-page';

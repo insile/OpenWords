@@ -1,5 +1,5 @@
-import OpenWords from "main";
-import { activateView, updateStatusBar } from "utils/process";
+import OpenWords from "../main";
+import { activateView, updateStatusBar } from "../utils/process";
 import { OPENWORDS_VIEW } from "../views/main-view";
 import { addDoubleBrackets, autoDoubleLinkWord } from "./words-link";
 import { Notice, TFile } from "obsidian";

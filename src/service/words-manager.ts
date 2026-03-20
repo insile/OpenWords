@@ -1,10 +1,10 @@
-import OpenWords from "main";
+import OpenWords from "../main";
 import { Notice, TFile } from "obsidian";
 import supermemo, { SuperMemoGrade } from "supermemo";
-import { CardInfo } from "utils/card-info";
-import { asArray, asDateString, asNumber } from "utils/converters";
-import { updateStatusBar } from "utils/process";
-import { OPENWORDS_VIEW, PageType } from "views/main-view";
+import { CardInfo } from "../utils/card-info";
+import { asArray, asDateString, asNumber } from "../utils/converters";
+import { updateStatusBar } from "../utils/process";
+import { OPENWORDS_VIEW, PageType } from "../views/main-view";
 
 
 // 扫描所有单词文件

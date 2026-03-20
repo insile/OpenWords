@@ -1,9 +1,9 @@
 import { MarkdownRenderer, Notice, Setting, TFile } from "obsidian";
 import { OpenWordsView } from "./main-view";
-import { CardInfo } from "utils/card-info";
-import { asArray, asDateString, asNumber } from "utils/converters";
+import { CardInfo } from "../utils/card-info";
+import { asArray, asDateString, asNumber } from "../utils/converters";
 import { SuperMemoGrade } from "supermemo";
-import { updateCard } from "service/words-manager";
+import { updateCard } from "../service/words-manager";
 
 export class LearningPage {
     view: OpenWordsView;

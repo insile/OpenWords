@@ -1,6 +1,6 @@
 import { MarkdownRenderer, Notice, TFile } from "obsidian";
 import { OpenWordsView } from "./main-view";
-import { CardInfo } from "utils/card-info";
+import { CardInfo } from "../utils/card-info";
 
 export class SpellingPage {
     view: OpenWordsView;

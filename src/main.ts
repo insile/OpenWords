@@ -4,9 +4,9 @@ import { OpenWordsSettingTab } from './settings/setting-tab';
 import { OpenWordsView, OPENWORDS_VIEW } from './views/main-view';
 import { CardInfo } from './utils/card-info';
 import posTagger from 'wink-pos-tagger';
-import { activateView, updateStatusBar } from 'utils/process';
-import { scanAllNotes } from 'service/words-manager';
-import { registerCommands, registerEditorMenu, registerFileWatchers, unregisterFileWatchers } from 'service/register';
+import { activateView, updateStatusBar } from './utils/process';
+import { scanAllNotes } from './service/words-manager';
+import { registerCommands, registerEditorMenu, registerFileWatchers, unregisterFileWatchers } from './service/register';
 
 
 // 插件主类

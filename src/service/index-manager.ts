@@ -1,7 +1,7 @@
-import OpenWords from "main";
+import OpenWords from "../main";
 import { Notice, TFile, TFolder, Vault } from "obsidian";
-import { asArray } from "utils/converters";
-import { writeFile } from "utils/process";
+import { asArray } from "../utils/converters";
+import { writeFile } from "../utils/process";
 
 
 // 生成单词索引 .base 文件

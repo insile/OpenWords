@@ -2,11 +2,11 @@ import { App, Notice, PluginSettingTab, Setting, TextComponent, normalizePath } 
 import { FolderSuggest, TagHistorySuggest } from '../utils/input-suggest';
 import { DEFAULT_SETTINGS } from './setting-data';
 import OpenWords from '../main';
-import { updateStatusBar } from 'utils/process';
+import { updateStatusBar } from '../utils/process';
 import { OPENWORDS_VIEW } from '../views/main-view';
-import { resetCard, scanAllNotes } from 'service/words-manager';
-import { registerFileWatchers } from 'service/register';
-import { createWordStatusBaseFile, generateIndex } from 'service/index-manager';
+import { resetCard, scanAllNotes } from '../service/words-manager';
+import { registerFileWatchers } from '../service/register';
+import { createWordStatusBaseFile, generateIndex } from '../service/index-manager';
 
 
 // 插件设置选项卡
