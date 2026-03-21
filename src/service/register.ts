@@ -1,8 +1,8 @@
 import OpenWords from "../main";
-import { activateView, updateStatusBar } from "../utils/process";
+import { activateView, truncateSelection, updateStatusBar } from "../utils/process";
 import { OPENWORDS_VIEW } from "../views/main-view";
-import { addDoubleBrackets, autoDoubleLinkWord } from "./words-link";
-import { Notice, TFile } from "obsidian";
+import { addDoubleBrackets, autoDoubleLinkWord, removeDoubleBrackets } from "./words-link";
+import { TFile } from "obsidian";
 import { loadWordMetadata } from "./words-manager";
 
 
@@ -30,6 +30,14 @@ export function registerCommands(plugin: OpenWords) {
         name: '单词双链',
         editorCallback: async () => {
             await autoDoubleLinkWord(plugin);
+        }
+    });
+    // 移除双链命令
+    plugin.addCommand({
+        id: 'removeDoubleBrackets',
+        name: '清除双链',
+        editorCallback: async () => {
+            await removeDoubleBrackets(plugin);
         }
     });
 }
@@ -87,24 +95,17 @@ export function unregisterFileWatchers(plugin: OpenWords) {
 export function registerEditorMenu(plugin: OpenWords) {
     plugin.registerEvent(
         plugin.app.workspace.on("editor-menu", (menu, editor, view) => {
-            const truncateSelection = (text: string, maxLength: number = 15): string => {
-                if (text.length <= maxLength) return text;
-                // 截断并添加省略号
-                return text.substring(0, maxLength) + "...";
-            };
+
             const selection = editor.getSelection().trim();
 
             const hasAnyLink = /\[\[.*?\]\]/.test(selection);
             if (hasAnyLink) {
                 menu.addItem((item) => {
                     item
-                        .setTitle("清除选中区域的所有双链")
-                        .setIcon("link-off")
-                        .onClick(() => {
-                            // 将所有 [[A|B]] 替换为 B，将 [[A]] 替换为 A
-                            const cleanedText = selection.replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, '$1');
-                            editor.replaceSelection(cleanedText);
-                            new Notice("已清除选中区域的所有双链");
+                        .setTitle("清除选中区域的所有链接")
+                        .setIcon("link")
+                        .onClick(async () => {
+                            await removeDoubleBrackets(plugin);
                         });
                 });
             }

@@ -119,28 +119,28 @@ export async function updateCard(plugin: OpenWords, card: CardInfo, grade: Super
         frontMatter["重复次数"] = result.repetition;
     });
 
-    new Notice(`${card.front} \n易记因子: ${result.efactor.toFixed(2)} \n重复次数: ${result.repetition} \n间隔: ${result.interval} \n到期日: ${newDate}`);
-
     // 等待元数据缓存更新（最多等待 1 秒）
     let attempts = 0;
-    while (attempts < 20) {
+    while (attempts < 10) {
         if (mode === 'new') {
             if (grade >= 3 && plugin.dueCards.has(card.front)) {
                 break; // 以移出新单词池
-            } else if (grade < 3) {
+            } else if (grade < 3 && (Math.abs(asNumber(plugin.newCards.get(card.front)?.efactor) - result.efactor) < 0.01)) {
                 break;
             }
         }
         else {
             if (grade < 3 && plugin.newCards.has(card.front)) {
                 break; // 以移出旧单词池
-            } else if (grade >= 3 && plugin.dueCards.get(card.front)?.efactor === result.efactor) {
+            } else if (grade >= 3 && (Math.abs(asNumber(plugin.dueCards.get(card.front)?.efactor) - result.efactor) < 0.01)) {
                 break;
             }
         }
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 100));
         attempts++;
     }
+    
+    new Notice(`${card.front} \n易记因子: ${result.efactor.toFixed(2)} \n重复次数: ${result.repetition} \n间隔: ${result.interval} \n到期日: ${newDate}`);
 }
 
 // 重置单词属性

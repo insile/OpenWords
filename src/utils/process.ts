@@ -39,3 +39,9 @@ export async function writeFile(app: App, filePath: string, content: string) {
     }
 }
 
+// 截断选中文本
+export function truncateSelection(text: string, maxLength: number = 15) {
+    if (text.length <= maxLength) return text;
+    // 截断并添加省略号
+    return text.substring(0, maxLength) + "...";
+}

@@ -1,3 +1,4 @@
+import { truncateSelection } from "utils/process";
 import OpenWords from "../main";
 import { MarkdownView, Notice } from "obsidian";
 
@@ -68,9 +69,30 @@ export async function autoDoubleLinkWord(plugin: OpenWords) {
         } else {
             editor.replaceSelection(`[[${selection}]]`);
         }
-        new Notice(`已成功链接到: ${selection}`);
+        new Notice(`已成功链接到: ${truncateSelection(selection)}`);
     } else {
         // 4. 如果文件不存在，可以提示或提供创建选项
-        new Notice(`单词库中未找到 "${selection}"`);
+        new Notice(`单词库中未找到 "${truncateSelection(selection)}"`);
     }
+}
+
+// 去除双链
+export async function removeDoubleBrackets(plugin: OpenWords) {
+    const activeView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView) {
+        new Notice("请在 Markdown 编辑器中使用此命令");
+        return;
+    }
+    const editor = activeView.editor;
+    const selection = editor.getSelection().trim();
+    if (!selection) {
+        new Notice("请先选中一个单词");
+        return;
+    }
+
+    // 将所有 [[A|B]] 替换为 B，将 [[A]] 替换为 A
+    const cleanedText = selection.replace(/\[\[(?:[^|\]]*\|)?([^\]]+)\]\]/g, '$1');
+    editor.replaceSelection(cleanedText);
+    new Notice("已清除选中区域的所有双链");
+
 }
