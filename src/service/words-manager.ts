@@ -94,14 +94,14 @@ export async function loadWordMetadata(plugin: OpenWords, file: TFile, single = 
 }
 
 // 更新单词元数据
-export async function updateCard(plugin: OpenWords, card: CardInfo, grade: SuperMemoGrade, mode: PageType) {
-    if (
-        (mode === 'new' && !plugin.newCards.has(card.front)) ||
-        (mode === 'old' && !plugin.dueCards.has(card.front))
-    ) {
-        new Notice(`${card.front} \n不属于本模式范围 \n评分无效并跳过`);
+export async function updateCard(plugin: OpenWords, front: string, grade: SuperMemoGrade, mode: PageType) {
+    let card
+    if (mode === 'new') { card = plugin.newCards.get(front)}
+    else if (mode === 'old') { card = plugin.dueCards.get(front) }
+    if (!card) {
+        new Notice(`${front} \n不属于本模式范围 \n评分无效并跳过`);
         return;
-    }
+    } 
 
     const result = supermemo(card, grade);
     const newDate = window.moment().add(result.interval, 'day').format('YYYY-MM-DD');
@@ -124,22 +124,27 @@ export async function updateCard(plugin: OpenWords, card: CardInfo, grade: Super
     while (attempts < 10) {
         if (mode === 'new') {
             if (grade >= 3 && plugin.dueCards.has(card.front)) {
-                break; // 以移出新单词池
-            } else if (grade < 3 && (Math.abs(asNumber(plugin.newCards.get(card.front)?.efactor) - result.efactor) < 0.01)) {
+                break; // 已移出新单词池
+            } else if (
+                grade < 3 
+                && (Math.abs(asNumber(plugin.newCards.get(card.front)?.efactor) - result.efactor) < 0.01)) {
                 break;
             }
         }
         else {
             if (grade < 3 && plugin.newCards.has(card.front)) {
-                break; // 以移出旧单词池
-            } else if (grade >= 3 && (Math.abs(asNumber(plugin.dueCards.get(card.front)?.efactor) - result.efactor) < 0.01)) {
+                break; // 已移出旧单词池
+            } else if (
+                grade >= 3
+                && (Math.abs(asNumber(plugin.dueCards.get(card.front)?.efactor) - result.efactor) < 0.01)
+                && plugin.dueCards.get(card.front)?.dueDate === newDate) {
                 break;
             }
         }
         await new Promise(resolve => setTimeout(resolve, 100));
         attempts++;
     }
-    
+
     new Notice(`${card.front} \n易记因子: ${result.efactor.toFixed(2)} \n重复次数: ${result.repetition} \n间隔: ${result.interval} \n到期日: ${newDate}`);
 }
 

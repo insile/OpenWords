@@ -1,9 +1,10 @@
-import { ItemView, WorkspaceLeaf, Component, Notice } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Component, Notice, TFile, debounce } from 'obsidian';
 import OpenWords from '../main';
 import { createWordStatusBaseFile } from '../service/index-manager';
 import { HomePage } from './home-page';
 import { LearningPage } from './learning-page';
 import { SpellingPage } from './spelling-page';
+import { CardInfo } from 'utils/card-info';
 
 export const OPENWORDS_VIEW = "openwords-view";
 export type PageType = 'home' | 'new' | 'old' | 'spelling';
@@ -18,7 +19,8 @@ export class OpenWordsView extends ItemView {
     homepage: HomePage;
     learningpage: LearningPage;
     spellingpage: SpellingPage;
-    
+    statsMap: Map<string, HTMLElement> = new Map();
+
     constructor(leaf: WorkspaceLeaf, plugin: OpenWords) {
         super(leaf);
         this.plugin = plugin;
@@ -36,7 +38,30 @@ export class OpenWordsView extends ItemView {
         this.viewContainer = container.createDiv({ cls: 'openwords-view-container' });
         this.statusBarEl = container.createDiv({ cls: 'openwords-view-statusbar' });
         await this.render();
-        this.updateStatusBar();
+        this.statusBarEl.empty();
+
+        // 定义需要显示的项 [Label, isTotal?]
+        const items: [string, boolean][] = [
+            ['待学习', false], ['待复习', false], ['今日到期', false],
+            ['已掌握', false], ['未启用', false], ['总计', true]
+        ];
+
+        const row1 = this.statusBarEl.createDiv({ cls: 'openwords-statusbar-row' });
+        const row2 = this.statusBarEl.createDiv({ cls: 'openwords-statusbar-row openwords-statusbar-total' });
+
+        items.forEach(([label, isTotal]) => {
+            const container = isTotal ? row2 : row1;
+            const itemEl = container.createDiv({ cls: `openwords-stat-item ${isTotal ? 'total' : ''}` });
+            itemEl.createSpan({ cls: 'openwords-stat-label', text: label });
+
+            // 存入 Map 方便后续直接更新文本
+            const countEl = itemEl.createSpan({ cls: 'openwords-stat-count' });
+            this.statsMap.set(label, countEl);
+
+            if (isTotal) itemEl.onClickEvent(() => this.openStatusFile());
+        });
+        this.updateStatusBar()
+        this.updateStatusBar = debounce(this.updateStatusBar.bind(this), 100);
     }
 
     async onClose() {
@@ -67,66 +92,43 @@ export class OpenWordsView extends ItemView {
         }
     }
 
+    // 更新状态栏
     updateStatusBar() {
-        if (!this.statusBarEl) return;
+        const { plugin } = this;
+        const now = window.moment();
 
-        // 计算各分类的单词数
-        const newCount = this.plugin.newCards.size;
-        const dueTodayCount = Array.from(this.plugin.dueCards.values())
-            .filter(card => window.moment(card.dueDate).isBefore(window.moment())).length;
-        const reviewCount = this.plugin.dueCards.size - dueTodayCount;
-        const masteredCount = this.plugin.masterCards.size;
-        const disabledCount = this.plugin.allCards.size - this.plugin.enabledCards.size;
-        const totalCount = this.plugin.allCards.size;
+        const dueToday = Array.from(plugin.dueCards.values())
+            .filter((c: CardInfo) => window.moment(c.dueDate).isBefore(now)).length;
 
-        // 清空状态栏
-        this.statusBarEl.empty();
+        const data: Record<string, number> = {
+            '待学习': plugin.newCards.size,
+            '待复习': plugin.dueCards.size - dueToday,
+            '今日到期': dueToday,
+            '已掌握': plugin.masterCards.size,
+            '未启用': plugin.allCards.size - plugin.enabledCards.size,
+            '总计': plugin.allCards.size
+        };
 
-        // 创建第一行：待学习、待复习、今日到期、已掌握、未启用
-        const row1 = this.statusBarEl.createDiv({ cls: 'openwords-statusbar-row' });
-
-        this.createStatItem(row1, '待学习', newCount);
-        this.createStatItem(row1, '待复习', reviewCount);
-        this.createStatItem(row1, '今日到期', dueTodayCount);
-        this.createStatItem(row1, '已掌握', masteredCount);
-        this.createStatItem(row1, '未启用', disabledCount);
-
-        // 创建第二行：总计
-        const row2 = this.statusBarEl.createDiv({ cls: 'openwords-statusbar-row openwords-statusbar-total' });
-        this.createStatItem(row2, '总计', totalCount, true);
+        for (const [label, count] of Object.entries(data)) {
+            const el = this.statsMap.get(label);
+            if (el) el.textContent = count.toString();
+        }
     }
 
-    private createStatItem(container: HTMLElement, label: string, count: number, isTotal: boolean = false) {
-        const item = container.createDiv({ cls: isTotal ? 'openwords-stat-item total' : 'openwords-stat-item' });
-        item.createSpan({ cls: 'openwords-stat-label', text: label });
-        item.createSpan({ cls: 'openwords-stat-count', text: count.toString() });
+    // 打开单词状态文件
+    async openStatusFile() {
+        try {
+            await createWordStatusBaseFile(this.plugin);
+            const path = `${this.plugin.settings.indexPath}/英语单词状态.base`;
+            const file = this.app.vault.getAbstractFileByPath(path);
 
-        // 添加点击事件，打开对应的视图
-        if (isTotal) {
-            item.addEventListener('click', () => {
-                // 使用立即执行的异步函数，并标记为 void
-                void (async () => {
-                    try {
-                        // 创建单词状态 .base 文件
-                        await createWordStatusBaseFile(this.plugin);
-
-                        const basePath = `${this.plugin.settings.indexPath}/英语单词状态.base`;
-                        const file = this.app.vault.getFileByPath(basePath);
-
-                        if (!file) {
-                            new Notice('单词状态文件不存在，请先生成索引');
-                            return;
-                        }
-
-                        // 打开 .base 文件
-                        const leaf = this.app.workspace.getLeaf(false);
-                        await leaf.openFile(file);
-                    } catch (error) {
-                        new Notice(`打开文件失败: ${String(error)}`);
-                        console.error('Open base file error:', error);
-                    }
-                })();
-            });
-        };
+            if (file instanceof TFile) {
+                await this.app.workspace.getLeaf(false).openFile(file);
+            } else {
+                new Notice('文件不存在，请先生成索引');
+            }
+        } catch {
+            new Notice('打开失败');
+        }
     }
 }

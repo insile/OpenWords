@@ -139,7 +139,7 @@ export class LearningPage {
                 .addButton(btn => {
                     btn.setButtonText(String(grade + 1));
                     btn.buttonEl.setAttribute('data-grade', String(grade + 1));
-                    btn.onClick(() => this.rateCard(grade, cardContainer));
+                    btn.onClick(async () => await this.rateCard(grade, cardContainer));
                 });
         }
     }
@@ -148,7 +148,7 @@ export class LearningPage {
     async rateCard( grade: SuperMemoGrade, cardContainer: HTMLDivElement) {
         if (this.isRating || !this.currentLearingCard) return;
         this.isRating = true;
-        await updateCard(this.view.plugin, this.currentLearingCard, grade, this.view.page);
+        await updateCard(this.view.plugin, this.currentLearingCard.front, grade, this.view.page);
         this.currentLearingCard = await this.pickNextLCard();
         this.renderCard(cardContainer);
         this.isRating = false;
@@ -164,7 +164,7 @@ export class LearningPage {
                 const btn = learningContainer.querySelector(`button[data-grade="${event.key}"]`);
                 if (btn) btn.classList.add('active');
                 const grade = parseInt(event.key) - 1 as SuperMemoGrade;
-                await updateCard(this.view.plugin, this.currentLearingCard, grade, this.view.page);
+                await updateCard(this.view.plugin, this.currentLearingCard.front, grade, this.view.page);
             }
         };
         const handleKeyup = async (event: KeyboardEvent) => {
